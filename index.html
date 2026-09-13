@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>帝王時代：王權爭霸 — AoE2 Web</title>
+<link rel="stylesheet" href="css/ui.css">
+</head>
+<body>
+<div id="gameWrap">
+  <canvas id="game" width="1280" height="720"></canvas>
+  <canvas id="hudc" width="1280" height="720"></canvas>
+
+  <div id="topbar" class="hidden">
+    <span class="res" id="rFood">🌾 0</span>
+    <span class="res" id="rWood">🪵 0</span>
+    <span class="res" id="rGold">🪙 0</span>
+    <span class="res" id="rStone">⛏️ 0</span>
+    <span class="res" id="rPop">👥 0/0</span>
+    <span class="res" id="rAge">黑暗時代</span>
+    <span class="res" id="rTime">00:00</span>
+    <span class="topBtn" id="btnSpeed">⏩ 1x</span>
+    <span class="topBtn" id="btnSave">💾 存檔</span>
+    <span class="topBtn" id="btnMenu">☰ 選單</span>
+  </div>
+
+  <div id="msgToasts"></div>
+  <canvas id="minimap" width="200" height="200" class="hidden"></canvas>
+  <div id="cmdPanel" class="hidden"></div>
+  <div id="buildMenu" class="hidden"></div>
+  <div id="tooltip" class="hidden"></div>
+  <div id="fpsTag"></div>
+
+  <div id="screenStart" class="screen">
+    <div id="startPanel">
+      <div id="startTitle">帝王時代</div>
+      <div id="startSub">AGE OF EMPIRES STYLE · WEB EDITION</div>
+      <div class="row"><button id="btnLobby" class="bigBtn">新遊戲</button></div>
+      <div class="row"><button id="btnResume" class="bigBtn hidden">繼續遊戲</button></div>
+      <div class="row"><button id="btnFs" class="bigBtn">⛶ 全螢幕</button></div>
+      <div class="row"><label class="chk"><input type="checkbox" id="chkSound" checked> 音效與音樂</label></div>
+      <div class="row tip">左鍵選取/拖框 · 右鍵命令 · A+左鍵攻擊移動 · S停止 · Ctrl+數字編隊 · T建造選單 · Esc選單 · F11全螢幕</div>
+    </div>
+    <div id="startScene"><canvas id="demoCanvas" width="960" height="600"></canvas></div>
+  </div>
+
+  <div id="screenLobby" class="screen hidden">
+    <div id="lobbyPanel">
+      <h2>遊戲設定</h2>
+      <div class="row">
+        <label>地圖大小
+          <select id="selMapSize">
+            <option value="48">小</option>
+            <option value="64" selected>中</option>
+            <option value="80">大</option>
+          </select>
+        </label>
+        <label>對手數量
+          <select id="selOpp">
+            <option value="1" selected>1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+          </select>
+        </label>
+        <label>隊伍模式
+          <select id="selTeam">
+            <option value="ffa" selected>各自為戰</option>
+            <option value="team">組隊（隊友分半）</option>
+          </select>
+        </label>
+        <label>AI 難度
+          <select id="selDiff">
+            <option value="0">簡單</option>
+            <option value="1" selected>標準</option>
+            <option value="2">困難</option>
+          </select>
+        </label>
+      </div>
+      <div class="row">
+        <label>你的文明
+          <select id="selCiv"></select>
+        </label>
+        <label class="chk"><input type="checkbox" id="chkRelic"> 聖物奪取勝負</label>
+        <label class="chk"><input type="checkbox" id="chkWonder"> 奇觀勝負</label>
+      </div>
+      <div class="row" id="lobbyPicks"></div>
+      <div class="row">
+        <button id="btnStart" class="bigBtn">開始遊戲</button>
+        <button id="btnBack" class="bigBtn">返回</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="screenMenu" class="screen hidden">
+    <div id="menuPanel">
+      <h2>選單</h2>
+      <div class="row col">
+        <button id="btnResumeGame" class="bigBtn">繼續遊戲</button>
+        <button id="btnSaveGame" class="bigBtn">儲存進度</button>
+        <button id="btnResign" class="bigBtn">投降</button>
+        <button id="btnQuit" class="bigBtn">返回主選單</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="screenEnd" class="screen hidden">
+    <div id="endPanel">
+      <div id="endTitle">勝利！</div>
+      <div class="row"><button id="btnEndQuit" class="bigBtn">返回主選單</button></div>
+    </div>
+  </div>
+</div>
+
+<script src="js/utils.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/sprites.js"></script>
+<script src="js/data.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
