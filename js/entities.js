@@ -126,9 +126,16 @@ class Unit extends Ent {
     return false;
   }
   distTo(e) {
+    if (e.typeId) {
+      const s = D.BUILDS[e.typeId];
+      const cx = clamp(this.x, e.tx, e.tx + s.fp[0]), cy = clamp(this.y, e.ty, e.ty + s.fp[1]);
+      let dx = this.x - cx, dy = this.y - cy;
+      const d = Math.hypot(dx, dy);
+      if (d > .01) { dx /= d; dy /= d; } else { dx = 0; dy = -1; }
+      return { d, ex: cx + dx * .35, ey: cy + dy * .35 };
+    }
     let ex, ey, rad;
-    if (e.typeId) { const s = D.BUILDS[e.typeId]; ex = e.tx + (s.fp[0] - 1) / 2; ey = e.ty + (s.fp[1] - 1) / 2; rad = Math.max(s.fp[0], s.fp[1]) / 2; }
-    else if (e.radius) { ex = e.x; ey = e.y; rad = e.radius(); }
+    if (e.radius) { ex = e.x; ey = e.y; rad = e.radius(); }
     else { ex = e.x; ey = e.y; rad = .45; }
     return { d: Math.hypot(this.x - ex, this.y - ey) - rad * .8, ex, ey };
   }
@@ -160,11 +167,12 @@ class Unit extends Ent {
       const dl = D.BUILDS[b.typeId];
       const isTC = b.typeId === "tc", isMill = b.typeId === "mill", isL = b.typeId === "lumber", isM = b.typeId === "mine";
       let ok = false;
-      if (resKind === "food") ok = isTC || (isMill && this.task && this.task.kind === "farm");
+      if (resKind === "food") ok = isTC || isMill;
       if (resKind === "wood") ok = isTC || isL;
       if (resKind === "gold" || resKind === "stone") ok = isTC || isM;
       if (!ok) continue;
-      const d = Math.abs(b.tx - this.x) + Math.abs(b.ty - this.y);
+      const sp2 = D.BUILDS[b.typeId];
+      const d = Math.abs(b.tx + sp2.fp[0] / 2 - this.x) + Math.abs(b.ty + sp2.fp[1] / 2 - this.y);
       if (d < bd) { bd = d; best = b; }
     }
     return best;
@@ -197,7 +205,8 @@ class Unit extends Ent {
         return;
       }
       const r = this.distTo(t);
-      if (r.d <= this.st.rng + .1 && (this.st.moving || !this.path)) {
+      if (r.d <= this.st.rng + .1) {
+        this.path = null;
         this.faceAt(t);
         this.act = this.spec.proj ? "fire" : "atk";
         this.frame = 0;

@@ -90,9 +90,12 @@ const UI = {
       }
       this.refreshPanel();
     } else {
-      const [ax, ay] = this.s2w(Math.min(this.dragS.x, this.dragE.x), Math.min(this.dragS.y, this.dragE.y));
-      const [bx2, by2] = this.s2w(Math.max(this.dragS.x, this.dragE.x), Math.max(this.dragS.y, this.dragE.y));
-      const x1 = Math.min(ax, bx2), x2 = Math.max(ax, bx2), y1 = Math.min(ay, by2), y2 = Math.max(ay, by2);
+      const cA = this.s2w(Math.min(this.dragS.x, this.dragE.x), Math.min(this.dragS.y, this.dragE.y));
+      const cB = this.s2w(Math.max(this.dragS.x, this.dragE.x), Math.min(this.dragS.y, this.dragE.y));
+      const cC = this.s2w(Math.min(this.dragS.x, this.dragE.x), Math.max(this.dragS.y, this.dragE.y));
+      const cD = this.s2w(Math.max(this.dragS.x, this.dragE.x), Math.max(this.dragS.y, this.dragE.y));
+      const xs = [cA[0], cB[0], cC[0], cD[0]], ys = [cA[1], cB[1], cC[1], cD[1]];
+      const x1 = Math.min(...xs), x2 = Math.max(...xs), y1 = Math.min(...ys), y2 = Math.max(...ys);
       if (!additive) { G.sel.clear(); G.selBld = null; }
       let any = false;
       for (const u of G.units) {
