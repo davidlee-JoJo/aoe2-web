@@ -4,6 +4,17 @@ const SPR = {
   _mem(k, fn) { let c = this._cache.get(k); if (!c) { c = fn(); this._cache.set(k, c); } return c; },
   _px(g, x, y, w, h, c) { g.fillStyle = c; g.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); },
   _poly(g, pts, c) { g.fillStyle = c; g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]); g.closePath(); g.fill(); },
+  _outline(g, w, h) {
+    const im = g.getImageData(0, 0, w, h), d = im.data;
+    const a = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) a[i] = d[i * 4 + 3] > 40 ? 1 : 0;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if (a[i]) continue;
+      if ((x > 0 && a[i - 1]) || (x < w - 1 && a[i + 1]) || (y > 0 && a[i - w]) || (y < h - 1 && a[i + w])) { d[i * 4] = 22; d[i * 4 + 1] = 16; d[i * 4 + 2] = 8; d[i * 4 + 3] = 230; }
+    }
+    g.putImageData(im, 0, 0);
+  },
 
   tile(name, variant) {
     return this._mem("t_" + name + "_" + variant, () => {
@@ -13,9 +24,9 @@ const SPR = {
       const stip = (cols, n) => { for (let i = 0; i < n; i++) { const px = 12 + rng() * 40, py = 6 + rng() * 20; if (Math.abs(px - 32) / 32 + Math.abs(py - 16) / 16 <= 0.82) this._px(g, px, py, 2, 2, cols[(rng() * cols.length) | 0]); } };
       if (name === "water" || name === "shallows") {
         dia(name === "water" ? "#2c5a88" : "#3f7ba3");
+        this._poly(g, [[32, 4], [56, 16], [32, 16]], "rgba(96,156,196,.3)");
         stip(name === "water" ? ["#376a9c", "#254d76", "#43799f"] : ["#5b90b4", "#4e83a8", "#6ea3c4"], 30);
-        g.fillStyle = "rgba(210,235,255,.45)";
-        for (let i = 0; i < 3; i++) this._px(g, 14 + (rng() * 36), 8 + rng() * 15, 4, 1, "rgba(210,235,255,.45)");
+        for (let i = 0; i < 5; i++) this._px(g, 12 + rng() * 38, 7 + rng() * 16, 3 + rng() * 4, 1, "rgba(214,238,255,.5)");
       } else if (name === "gold") {
         dia("#4c7a2e"); stip(["#577f33", "#426c26"], 20);
         const gems = ["#f5c542", "#d9a01f", "#ffe98a"];
@@ -34,9 +45,46 @@ const SPR = {
         g.fillStyle = "#d8322a";
         for (let i = 0; i < 8; i++) { g.beginPath(); g.arc(24 + rng() * 18, 12 + rng() * 12, 1.9, 0, 7); g.fill(); }
       } else {
-        dia("#4c7a2e"); stip(["#577f33", "#5a8a38", "#426c26", "#628445"], 28);
-        if (variant > 2) for (let i = 0; i < 2; i++) { const px = 16 + rng() * 32, py = 8 + rng() * 16; this._px(g, px, py, 2, 3, "rgba(214,201,120,.7)"); }
+        dia("#4c7a2e");
+        this._poly(g, [[0, 16], [32, 0], [64, 16]], "rgba(128,168,84,.28)");
+        this._poly(g, [[0, 16], [64, 16], [32, 32]], "rgba(24,48,18,.3)");
+        stip(["#577f33", "#5a8a38", "#426c26", "#628445", "#3d6523"], 34);
+        for (let i = 0; i < 3; i++) { const px = 14 + rng() * 34, py = 6 + rng() * 18; this._px(g, px, py, 3, 2, rng() < .5 ? "rgba(40,74,30,.5)" : "rgba(112,144,82,.45)"); }
+        g.lineWidth = 1;
+        g.strokeStyle = "rgba(18,38,12,.55)";
+        g.beginPath(); g.moveTo(0, 16); g.lineTo(32, 32); g.lineTo(64, 16); g.stroke();
+        g.strokeStyle = "rgba(148,186,96,.42)";
+        g.beginPath(); g.moveTo(0, 16); g.lineTo(32, 0); g.lineTo(64, 16); g.stroke();
+        if (variant === 3) for (let i = 0; i < 3; i++) { const px = 16 + rng() * 30, py = 7 + rng() * 15; this._px(g, px, py, 2, 3, "rgba(214,201,120,.85)"); this._px(g, px, py, 2, 1, "#fff6d0"); }
+        if (variant === 2) { g.fillStyle = "rgba(96,74,40,.5)"; g.beginPath(); g.ellipse(32, 17, 9, 4.5, 0, 0, 7); g.fill(); }
       }
+      return c;
+    });
+  },
+
+  edge(dir) {
+    return this._mem("e" + dir, () => {
+      const c = cc(64, 32), g = c.getContext("2d");
+      const E = [[[64, 16], [32, 32]], [[0, 16], [32, 0]], [[32, 32], [0, 16]], [[32, 0], [64, 16]]][dir];
+      const C = [32, 16];
+      const i1 = [E[0][0] + (C[0] - E[0][0]) * .3, E[0][1] + (C[1] - E[0][1]) * .3], i2 = [E[1][0] + (C[0] - E[1][0]) * .3, E[1][1] + (C[1] - E[1][1]) * .3];
+      this._poly(g, [E[0], E[1], i2, i1], "rgba(198,170,104,.75)");
+      const m = [(E[0][0] + E[1][0]) / 2, (E[0][1] + E[1][1]) / 2];
+      const f1 = [E[0][0] + (E[1][0] - E[0][0]) * .18, E[0][1] + (E[1][1] - E[0][1]) * .18], f2 = [E[0][0] + (E[1][0] - E[0][0]) * .5, E[0][1] + (E[1][1] - E[0][1]) * .5], f3 = [E[0][0] + (E[1][0] - E[0][0]) * .82, E[0][1] + (E[1][1] - E[0][1]) * .82];
+      this._poly(g, [f1, f2, m], "rgba(238,232,200,.55)");
+      this._poly(g, [f2, f3, m], "rgba(238,232,200,.55)");
+      return c;
+    });
+  },
+
+  decal(kind) {
+    return this._mem("d_" + kind, () => {
+      const c = cc(16, 12), g = c.getContext("2d");
+      const rng = makeRng("dc" + kind);
+      if (kind === "pebble") { for (let i = 0; i < 3; i++) { const x = 3 + rng() * 9, y = 4 + rng() * 5; this._px(g, x, y, 3, 2, "#82857a"); this._px(g, x, y, 2, 1, "#aeb29c"); } }
+      else if (kind === "flower") { for (let i = 0; i < 2; i++) { const x = 3 + rng() * 9, y = 3 + rng() * 5; this._px(g, x, y + 2, 1, 3, "#3d6523"); this._px(g, x - 1, y, 3, 2, rng() < .5 ? "#e8d44a" : "#e6e0f2"); this._px(g, x, y, 1, 1, "#fff8d8"); } }
+      else if (kind === "tuft") { for (let i = 0; i < 4; i++) { const x = 3 + rng() * 9; this._px(g, x, 3 + rng() * 5, 1, 4, "#2f5c22"); this._px(g, x, 3 + rng() * 5, 1, 2, "#487e2e"); } }
+      else { g.fillStyle = "rgba(96,74,40,.6)"; g.beginPath(); g.ellipse(8, 6, 6, 3.4, 0, 0, 7); g.fill(); }
       return c;
     });
   },
@@ -47,15 +95,22 @@ const SPR = {
       if (id === "tree") {
         const c = cc(72, 76), g = c.getContext("2d");
         const pine = (variant % 2) === 0;
-        g.fillStyle = "rgba(0,0,0,.3)"; g.beginPath(); g.ellipse(36, 66, 15, 5, 0, 0, 7); g.fill();
-        this._px(g, 33, 50, 6, 16, "#5a3a1c"); this._px(g, 33, 50, 3, 16, "#6b4523");
-        const greens = pine ? ["#1e4d24", "#2a5c2e", "#173d1c", "#32743a"] : ["#2e6b2a", "#3f7c34", "#245620", "#4a8a3e"];
-        const blob = (cx, cy, r) => {
-          for (let i = 0; i < 30; i++) { const a = rng() * 7, rr = rng() * r; this._px(g, cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * .8, 3, 4, greens[(rng() * 4) | 0]); }
-          for (let i = 0; i < 9; i++) { const a = rng() * 7, rr = rng() * r * .8; this._px(g, cx + Math.cos(a) * rr, cy - r * .2 + Math.sin(a) * rr * .5, 2, 2, greens[2]); }
+        g.fillStyle = "rgba(0,0,0,.32)"; g.beginPath(); g.ellipse(37, 67, 16, 5.4, 0, 0, 7); g.fill();
+        this._px(g, 33, 50, 6, 16, "#4e3318"); this._px(g, 34, 50, 2, 16, "#6b4523"); this._px(g, 38, 52, 2, 12, "#3d2812");
+        const base = pine ? ["#142f16", "#1e4d24", "#2a5c2e", "#3a7438"] : ["#1d4419", "#2e6b2a", "#3f7c34", "#559446"];
+        const blob = (cx, cy, r, tone) => {
+          for (let i = 0; i < 34; i++) { const a = rng() * 7, rr = rng() * r; this._px(g, cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * .8, 3, 4, base[tone]); }
         };
-        if (pine) { blob(36, 16, 8); blob(36, 30, 11); blob(36, 44, 12); }
-        else { blob(36, 26, 15); blob(27, 38, 10); blob(46, 38, 10); blob(36, 46, 9); }
+        const light = (cx, cy, r) => {
+          for (let i = 0; i < 12; i++) { const a = rng() * 7, rr = rng() * r * .7; this._px(g, cx + Math.cos(a) * rr - r * .22, cy + Math.sin(a) * rr * .7 - r * .22, 2, 2, base[3]); }
+        };
+        if (pine) {
+          blob(36, 52, 9, 0); blob(36, 41, 12, 1); blob(36, 27, 10, 1); blob(36, 14, 7, 1);
+          light(36, 12, 6); light(36, 25, 8); light(36, 39, 9);
+        } else {
+          blob(36, 46, 10, 0); blob(36, 24, 15, 1); blob(26, 37, 10, 1); blob(46, 37, 10, 1);
+          light(33, 20, 9); light(24, 33, 6); light(44, 33, 6); light(35, 44, 7);
+        }
         return c;
       }
       if (id === "deer") return this._animal(rng, "#8a5a2c", "#5f3c1a", true);
@@ -76,6 +131,7 @@ const SPR = {
     this._px(g, 13, 21, 2, 5, dark); this._px(g, 16, 21, 2, 5, dark);
     if (ant) { this._px(g, 17, 4, 1, 5, "#7a5a2a"); this._px(g, 20, 3, 1, 5, "#7a5a2a"); this._px(g, 17, 5, 4, 1, "#7a5a2a"); }
     else { g.fillStyle = "#f4efe2"; g.beginPath(); g.ellipse(11, 13, 7, 5.5, 0, 0, 7); g.fill(); this._px(g, 13, 7, 6, 4, "#f4efe2"); }
+    this._outline(g, c.width, c.height);
     return c;
   },
 
@@ -157,6 +213,7 @@ const SPR = {
       }
       this._wpn(g, B, wpnUse, sx, -10.5, 2.9, act === "heal" ? (af === 1 ? 1 : 0) : lv);
       if (kind === "vill") { B(-4.4, -9, 1.8, 1.6, "#b98a3f"); }
+      this._outline(g, c.width, c.height);
       return c;
     });
   },
@@ -253,6 +310,7 @@ const SPR = {
         this._px(g, 26, by - 46, 8, 7, col); this._px(g, 26, by - 46, 8, 2, shade(col, .75));
         this._px(g, 9, by - 10, 5, 5, "#8a8f96");
       }
+      this._outline(g, c.width, c.height);
       return c;
     });
   },
@@ -270,12 +328,13 @@ const SPR = {
     return (dx, dy) => [((dx - dy) - (w - d) / 2) * HW, ((dx + dy) - (w + d) / 2) * HH];
   },
 
-  building(typeId, colorIdx, stage) {
+  building(typeId, colorIdx, stage, fr) {
     const st = Math.round(clamp(stage, 0, 1) * 4);
-    return this._mem("b_" + typeId + "_" + colorIdx + "_" + st, () => this._mkBuilding(typeId, colorIdx, st / 4, (hashStr(typeId) % 3)));
+    fr = fr ? 1 : 0;
+    return this._mem("b_" + typeId + "_" + colorIdx + "_" + st + "_" + fr, () => this._mkBuilding(typeId, colorIdx, st / 4, (hashStr(typeId) % 3), fr));
   },
 
-  _mkBuilding(typeId, colorIdx, stage, variant) {
+  _mkBuilding(typeId, colorIdx, stage, variant, fr) {
     const spec = D.BUILDS[typeId];
     const [w, d] = spec.fp, col = D.PCOLORS[colorIdx % D.PCOLORS.length];
     const style = spec.style || "hip";
@@ -346,7 +405,8 @@ const SPR = {
         g.strokeStyle = "rgba(0,0,0,.3)"; g.beginPath(); g.moveTo(apex[0], apex[1]); g.lineTo(top[2][0], top[2][1]); g.stroke();
         if (style !== "tower") {
           this._px(g, apex[0], apex[1] - 10, 1.5, 10, "#4c3218");
-          this._poly(g, [[apex[0] + 1, apex[1] - 10], [apex[0] + 9, apex[1] - 8], [apex[0] + 1, apex[1] - 4]], col);
+          const fw = fr ? 7 : 10, fy = fr ? -5 : -8;
+          this._poly(g, [[apex[0] + 1, apex[1] - 10], [apex[0] + fw, apex[1] + fy], [apex[0] + 1, apex[1] - 4]], col);
         }
       }
     } else if (stage > 0) {
@@ -391,7 +451,7 @@ const SPR = {
         this._poly(g, [[p[0] - 7, p[1]], [p[0] + 7, p[1]], [p[0] + 7, p[1] - bh - 20], [p[0], p[1] - bh - 26], [p[0] - 7, p[1] - bh - 20]], shade(wallC, .95));
         this._poly(g, [[p[0] - 7, p[1] - bh - 20], [p[0] + 7, p[1] - bh - 20], [p[0] + 5, p[1] - bh - 24], [p[0] - 5, p[1] - bh - 24]], shade(wallC, 1.15));
         this._px(g, p[0] - 1, p[1] - bh - 36, 1.5, 12, "#4c3218");
-        this._poly(g, [[p[0] + 1, p[1] - bh - 36], [p[0] + 8, p[1] - bh - 33], [p[0] + 1, p[1] - bh - 30]], col);
+        this._poly(g, [[p[0] + 1, p[1] - bh - 36], [p[0] + (fr ? 7 : 9), p[1] - bh - (fr ? 31 : 34)], [p[0] + 1, p[1] - bh - 30]], col);
       }
     }
     if (typeId === "wonder") {
@@ -407,6 +467,20 @@ const SPR = {
       g.fillStyle = col;
       g.fillRect(em[0] - 14, em[1] - bh + 2, 6, 7);
       g.fillStyle = "#fff"; g.font = "7px sans-serif";
+    }
+    if (stage > 0 && style !== "field" && style !== "dock") {
+      g.strokeStyle = "rgba(24,16,6,.62)"; g.lineWidth = 1;
+      g.beginPath();
+      g.moveTo(D0[0], D0[1]); g.lineTo(C0[0], C0[1]); g.lineTo(B0[0], B0[1]);
+      g.moveTo(D0[0], D0[1]); g.lineTo(D0[0], D0[1] - bh); g.lineTo(A[0], A[1] - bh); g.lineTo(B0[0], B0[1] - bh); g.lineTo(B0[0], B0[1]);
+      g.stroke();
+      if (stage >= 1 && style !== "flat") {
+        const top = [A, B0, C0, D0].map(p => [p[0], p[1] - bh]);
+        const apex2 = [riseW / 2, riseH - 8 - bh - (wh < 20 ? 20 : 26)];
+        g.beginPath();
+        g.moveTo(apex2[0], apex2[1]); g.lineTo(top[1][0], top[1][1]); g.lineTo(top[2][0], top[2][1]); g.lineTo(top[3][0], top[3][1]); g.closePath();
+        g.stroke();
+      }
     }
     return c;
   },

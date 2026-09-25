@@ -176,6 +176,7 @@ class Unit extends Ent {
     if (this.actK > 0) this.actK -= dt;
     if (this.aggroT > 0) this.aggroT -= dt;
     if (this.repathT > 0) this.repathT -= dt;
+    if (this.hitT > 0) this.hitT -= dt;
     this.act = "std";
     const m = this.mode;
     if (m === "move" || m === "amove") {
@@ -212,7 +213,7 @@ class Unit extends Ent {
       if (!b || !b.alive) { this.setMode("idle"); return; }
       if (b.done) { if (!b.queue || b.queue.length === 0) b.queue = b.queue || []; this.setMode("idle"); return; }
       const r = this.distTo(b);
-      if (r.d < 1.9) { if (this.path) this.path = null; this.faceAt(b); this.act = "build"; this.actT += dt; this.frame = 0; b.addBuild(this, dt); }
+      if (r.d < 1.9) { if (this.path) this.path = null; this.faceAt(b); this.act = "build"; this.actT += dt; this.frame = 0; b.addBuild(this, dt); if (Math.random() < dt * 5) spawnParts(b.tx + b.spec.fp[0] / 2, b.ty + b.spec.fp[1] / 2, "#b0a080", 1); }
       else { if (!this.path) { const s = D.BUILDS[b.typeId]; this.pathTo((b.tx + ((s.fp[0] - 1) / 2)) | 0, (b.ty + s.fp[1] + .5) | 0, 2.2); } this.step(dt); }
     } else if (m === "repair") {
       const b = this.task.b;
@@ -306,6 +307,10 @@ class Unit extends Ent {
       const take = Math.min(rate, amt);
       if (tsk.src.amt !== undefined) tsk.src.amt -= take; else tsk.src.food -= take;
       this.carry += take;
+      const src2 = tsk.src;
+      const gx = src2.x !== undefined ? src2.x : src2.tx + (src2.typeId ? D.BUILDS[src2.typeId].fp[0] / 2 : .5);
+      const gy = src2.y !== undefined ? src2.y : src2.ty + (src2.typeId ? D.BUILDS[src2.typeId].fp[1] / 2 : .5);
+      if (Math.random() < .6) spawnParts(gx, gy, tsk.res === "wood" ? "#8a5f2e" : tsk.res === "gold" ? "#f5c542" : tsk.res === "stone" ? "#aab0b8" : (src2.typeId === "farm" ? "#d9b23a" : "#c04048"), 1);
       if (Math.random() < dt * .8) AudioSys.sfx("gather");
       if (tsk.src.tid) { tsk.src.mode = "flee"; tsk.src.scareT = 3; }
     }
@@ -508,6 +513,10 @@ function dealDamage(tgt, base, bonus, owner, pierce) {
   const redBonus = Math.max(0, bonus - sar * (1 - (pierce || 0)));
   const final = Math.max(1, Math.round(redBase + redBonus));
   tgt.hp -= final;
+  if (tgt.st) tgt.hitT = .14;
+  const hx2 = tgt.x !== undefined ? tgt.x : tgt.tx + (D.BUILDS[tgt.typeId] ? D.BUILDS[tgt.typeId].fp[0] / 2 : .5);
+  const hy2 = tgt.y !== undefined ? tgt.y : tgt.ty + (D.BUILDS[tgt.typeId] ? D.BUILDS[tgt.typeId].fp[1] / 2 : .5);
+  spawnParts(hx2, hy2, tgt.typeId ? "#b8b09a" : "#a03028", tgt.typeId ? 2 : 3);
   if (Math.random() < .4) AudioSys.sfx("hit");
   if (tgt.owner >= 0 && isEnemy(owner, tgt.owner)) {
     G.players[tgt.owner].hitT = 3;

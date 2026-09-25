@@ -162,8 +162,8 @@ function loadGame(data) {
     players: [], units: [], buildings: [], animals: [], projs: [], relics: [],
     time: data.time || 0, speed: 1, paused: false, running: true,
     camX: 0, camY: 0, camSPD: 14, keys: {},
-    sel: new Set(), selBld: null, ctrl: {}, placing: null, visionT: 0, mmDirty: true,
-    cfg, relicTotal: 4, ended: false, wonderB: null, floaters: []
+    sel: new Set(), selBld: null, ctrl: {}, placing: null, visionT: 0, mmDirty: true, fogDirty: 0,
+    cfg, relicTotal: 4, ended: false, wonderB: null, floaters: [], parts: []
   };
   window.G = G;
   G.findPath = (sx, sy, tx, ty, tol, fo, bl) => findPath(sx, sy, tx, ty, tol, fo === undefined ? -1 : fo, bl);
@@ -181,6 +181,7 @@ function loadGame(data) {
   for (const ad of data.animals) { const a = new Animal(ad.tid, ad.x, ad.y); a.food = ad.food; G.animals.push(a); }
   for (const rd of data.res) G.resGrid.set(tkey(rd.tx, rd.ty), { t: rd.t, amt: rd.amt, tx: rd.tx, ty: rd.ty });
   for (const rl of data.relics) if (!rl.got) G.relics.push({ id: G.relics.length, x: rl.x, y: rl.y, got: false, carried: false });
+  makeDecals(cfg.seed || 1);
   updateVision();
   const tc = G.buildings.find(b => b.owner === 0);
   if (tc) { G.camX = tc.tx + 1.5; G.camY = tc.ty + 1.5; }

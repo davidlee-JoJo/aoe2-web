@@ -49,9 +49,9 @@ function newGame(cfg) {
     time: 0, speed: 1, paused: false, running: true,
     camX: 0, camY: 0, camSPD: 14, keys: {},
     sel: new Set(), selBld: null, ctrl: {}, placing: null,
-    seen: null, vis: null, visionT: 0, mmDirty: true,
+    seen: null, vis: null, visionT: 0, mmDirty: true, fogDirty: 0,
     cfg, relicTotal: 4, ended: false, wonderB: null,
-    floaters: [], lastSpeed: 1
+    floaters: [], parts: [], lastSpeed: 1
   };
   window.G = G;
   G.terr = new Uint8Array(G.MW * G.MH);
@@ -129,6 +129,17 @@ function genMap(cfg, rng) {
     do { x = 4 + rng() * (MW - 8); y = 4 + rng() * (MH - 8); tries++; }
     while (tries < 200 && (terr[(y | 0) * MW + (x | 0)] === 2 || tileRes(x | 0, y | 0)));
     G.relics.push({ id: r, x, y, got: false, carried: false });
+  }
+  makeDecals(cfg.seed || 1);
+}
+function makeDecals(seed) {
+  const MW = G.MW, MH = G.MH, dr = makeRng("dec" + seed);
+  G.decals = new Map();
+  for (let i = 0; i < MW * MH / 55; i++) {
+    const x = (dr() * MW) | 0, y = (dr() * MH) | 0, j = y * MW + x;
+    if (G.terr[j] !== 0 || tileRes(x, y)) continue;
+    const r = dr();
+    G.decals.set(j, r < .38 ? "tuft" : r < .62 ? "pebble" : r < .8 ? "flower" : "dirt");
   }
 }
 function pickStarts(n, rng) {
@@ -241,6 +252,14 @@ function updateVision() {
     for (const u of G.units) if (u.alive && u.owner === pl.idx) see(u.x, u.y, u.st.los);
     for (const b of G.buildings) if (b.alive && b.done && b.owner === pl.idx) see(b.tx + (b.spec.fp[0] - 1) / 2, b.ty + (b.spec.fp[1] - 1) / 2, b.spec.los);
   }
+  G.fogDirty = (G.fogDirty || 0) + 1;
+}
+
+function spawnParts(x, y, col, n) {
+  if (!G || !G.parts || G.parts.length > 260) return;
+  for (let i = 0; i < n; i++) {
+    G.parts.push({ x: x + (Math.random() - .5) * .5, y: y + (Math.random() - .5) * .5, z: 4 + Math.random() * 8, vx: (Math.random() - .5) * 1.8, vy: (Math.random() - .5) * 1.8, vz: 16 + Math.random() * 20, life: .45 + Math.random() * .35, col, sz: Math.random() < .3 ? 3 : 2 });
+  }
 }
 
 function updateGame(dt) {
@@ -249,6 +268,11 @@ function updateGame(dt) {
   G.time += dt;
   G.visionT -= dt;
   if (G.visionT <= 0) { G.visionT = .35; updateVision(); }
+  for (let i = G.parts.length - 1; i >= 0; i--) {
+    const q = G.parts[i];
+    q.life -= dt; q.x += q.vx * dt; q.y += q.vy * dt; q.z += q.vz * dt; q.vz -= 62 * dt;
+    if (q.life <= 0 || q.z < 0) G.parts.splice(i, 1);
+  }
   for (const p of G.players) {
     if (p.hitT > 0) p.hitT -= dt;
     if (p.eraNext > p.era) {
@@ -426,7 +450,18 @@ function renderGame() {
         let tn = "grass";
         if (r) { if (r.t === "gold") tn = "gold"; else if (r.t === "stone") tn = "stone"; else if (r.t === "berry") tn = "berry"; }
         c.drawImage(SPR.tile(tn, r ? 0 : (tx * 7 + ty * 13) & 3), sx - 32, sy - 16);
-        if (r && r.t === "tree") c.drawImage(SPR.ground("tree", (tx * 5 + ty * 3) % 4), sx - 36, sy - 56);
+        if (!r) {
+          const dc = G.decals && G.decals.get(i);
+          if (dc) c.drawImage(SPR.decal(dc), sx - 8, sy - 6);
+          for (let d4 = 0; d4 < 4; d4++) {
+            const nx2 = tx + [1, -1, 0, 0][d4], ny2 = ty + [0, 0, 1, -1][d4];
+            if (nx2 >= 0 && ny2 >= 0 && nx2 < G.MW && ny2 < G.MH && G.terr[ny2 * G.MW + nx2] === 2) c.drawImage(SPR.edge(d4), sx - 32, sy - 16);
+          }
+        }
+        if (r && r.t === "tree") {
+          const sw = Math.round(Math.sin(G.time * 1.4 + tx * 2.7 + ty * 1.9) * 1.3);
+          c.drawImage(SPR.ground("tree", (tx * 5 + ty * 3) % 4), sx - 36 + sw, sy - 56);
+        }
       }
     }
   }
@@ -484,6 +519,13 @@ function renderGame() {
       c.save(); c.translate(sx, sy - 8); c.rotate(ang); c.drawImage(sp, -8, -3); c.restore();
     }
   }
+  for (const q of G.parts) {
+    const [qx, qy] = w2s(q.x, q.y);
+    c.globalAlpha = clamp(q.life * 2.6, 0, 1);
+    c.fillStyle = q.col;
+    c.fillRect(qx - q.sz / 2, qy - 10 - q.z, q.sz, q.sz);
+  }
+  c.globalAlpha = 1;
   if (G.placing && UI && UI.ghostTile) UI.drawPlacement(c, w2s);
   if (!G.resLabelsOff) {
     c.font = "bold 9px monospace"; c.textAlign = "center"; c.lineWidth = 2;
@@ -521,7 +563,7 @@ function drawBuilding(c, b, w2s) {
   const spec = b.spec;
   const [sx, sy] = w2s(b.tx + spec.fp[0] / 2, b.ty + spec.fp[1] / 2);
   const stage = b.typeId === "farm" ? (b.done ? (b.food > 0 ? 1 : .15) : b.progress) : b.progress;
-  const spr = SPR.building(b.typeId, G.players[b.owner].color, stage);
+  const spr = SPR.building(b.typeId, G.players[b.owner].color, stage, b.done ? (G.time * 2 | 0) % 2 : 0);
   c.globalAlpha = b.done ? 1 : .92;
   c.drawImage(spr, sx - spr._anchorX, sy - spr._anchorY + (spec.fp[0] + spec.fp[1] - 2) * HH / 2 * 0);
   c.globalAlpha = 1;
@@ -560,6 +602,12 @@ function drawUnit(c, u, w2s) {
   else spr = SPR.unit(u.spec.spr, G.players[u.owner].color, u.dir, u.alive ? u.frame : 0, u.spec.wpn || "none", act, af);
   c.globalAlpha = u.alive ? 1 : Math.max(0, u.fade);
   c.drawImage(spr, sx - spr.width / 2, sy - spr.height + 8);
+  if (u.alive && u.hitT > 0) {
+    c.globalCompositeOperation = "lighter";
+    c.globalAlpha = Math.min(.6, u.hitT * 4);
+    c.drawImage(spr, sx - spr.width / 2, sy - spr.height + 8);
+    c.globalCompositeOperation = "source-over";
+  }
   c.globalAlpha = 1;
   if (u.carry > 0) { c.fillStyle = "#c8a24a"; c.fillRect(sx - 3, sy - spr.height - 2, 6, 5); }
   if (u.alive && u.hp < u.maxHp && (u.owner === 0 || G.vis[(u.y | 0) * G.MW + (u.x | 0)] > 0)) hpBar(c, sx, sy - spr.height + 2 + 3, 22, u.hp / u.maxHp);
@@ -572,16 +620,19 @@ function drawAnimal(c, a, w2s) {
 }
 
 function renderMinimap() {
-  const mc = GAME.mc, mm = GAME.mm;
+  const mc = GAME.mc, S = 240, cx = S / 2;
   if (!G) return;
-  if (G.mapDirty) {
-    const off = GAME._mmOff && GAME._mmOff.width === G.MW ? GAME._mmOff : (GAME._mmOff = cc(G.MW, G.MH));
-    const g = off.getContext("2d");
-    const img = g.createImageData(G.MW, G.MH);
-    for (let y = 0; y < G.MH; y++) for (let x = 0; x < G.MW; x++) {
-      const i = (y * G.MW + x) * 4;
-      const t = G.terr[y * G.MW + x];
-      const r = tileRes(x, y);
+  const MW = G.MW, MH = G.MH;
+  const s = S / (MW + MH), half = (MW - MH) / 2;
+  mc.imageSmoothingEnabled = false;
+  mc.setTransform(1, 0, 0, 1, 0, 0);
+  mc.clearRect(0, 0, S, S);
+  if (G.mapDirty || !GAME._mmT || GAME._mmT.width !== MW || GAME._mmT.height !== MH) {
+    if (!GAME._mmT || GAME._mmT.width !== MW || GAME._mmT.height !== MH) GAME._mmT = cc(MW, MH);
+    const g = GAME._mmT.getContext("2d");
+    const img = g.createImageData(MW, MH);
+    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
+      const i = (y * MW + x) * 4, t = G.terr[y * MW + x], r = tileRes(x, y);
       let col = [76, 122, 46];
       if (t === 2) col = [44, 90, 136];
       else if (r) { if (r.t === "tree") col = [24, 58, 26]; else if (r.t === "gold") col = [217, 160, 31]; else if (r.t === "stone") col = [154, 160, 168]; else if (r.t === "berry") col = [120, 40, 30]; }
@@ -589,27 +640,50 @@ function renderMinimap() {
     }
     g.putImageData(img, 0, 0);
     G.mapDirty = false;
-    G._mapBase = g;
   }
-  mc.imageSmoothingEnabled = false;
-  mc.clearRect(0, 0, 200, 200);
-  mc.drawImage(GAME._mmOff, 0, 0, 200, 200);
-  const sc = 200 / G.MW;
+  if (G.fogDirty !== GAME._mmFogV || !GAME._mmF || GAME._mmF.width !== MW || GAME._mmF.height !== MH) {
+    if (!GAME._mmF || GAME._mmF.width !== MW || GAME._mmF.height !== MH) GAME._mmF = cc(MW, MH);
+    const g = GAME._mmF.getContext("2d");
+    const img = g.createImageData(MW, MH);
+    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
+      const i = (y * MW + x) * 4, j = y * MW + x;
+      img.data[i] = 5; img.data[i + 1] = 6; img.data[i + 2] = 10;
+      img.data[i + 3] = G.seen[j] ? (G.vis[j] ? 0 : 110) : 235;
+    }
+    g.putImageData(img, 0, 0);
+    GAME._mmFogV = G.fogDirty;
+  }
+  mc.save();
+  mc.setTransform(s, s, -s, s, cx - half * s, 0);
+  mc.drawImage(GAME._mmT, 0, 0);
+  mc.drawImage(GAME._mmF, 0, 0);
+  const pc = c => D.PCOLORS[G.players[c].color % D.PCOLORS.length];
   for (const b of G.buildings) {
     if (!isVisibleB(b)) continue;
-    mc.fillStyle = G.seen[(b.ty | 0) * G.MW + (b.tx | 0)] && G.vis[(b.ty | 0) * G.MW + (b.tx | 0)] > 0 ? D.PCOLORS[G.players[b.owner].color % D.PCOLORS.length] : "#777";
-    mc.fillRect(b.tx * sc, b.ty * sc, Math.max(2, b.spec.fp[0] * sc), Math.max(2, b.spec.fp[1] * sc));
+    mc.fillStyle = G.seen[(b.ty | 0) * MW + (b.tx | 0)] && G.vis[(b.ty | 0) * MW + (b.tx | 0)] > 0 ? pc(b.owner) : "#777";
+    mc.fillRect(b.tx, b.ty, b.spec.fp[0], b.spec.fp[1]);
   }
   for (const u of G.units) {
     if (u.owner !== 0 && !visible(u, 0)) continue;
-    mc.fillStyle = D.PCOLORS[G.players[u.owner].color % D.PCOLORS.length];
-    mc.fillRect(u.x * sc - 1, u.y * sc - 1, 2.4, 2.4);
+    mc.fillStyle = pc(u.owner);
+    mc.fillRect(u.x - 1.1, u.y - 1.1, 2.2, 2.2);
   }
-  for (const r of G.relics) if (!r.got && visible({ owner: -1, x: r.x, y: r.y }, 0)) { mc.fillStyle = "#ffd970"; mc.fillRect(r.x * sc - 2, r.y * sc - 2, 4, 4); }
-  mc.fillStyle = "rgba(0,0,0,.55)";
-  for (let y = 0; y < G.MH; y++) for (let x = 0; x < G.MW; x++) {
-    const i = y * G.MW + x;
-    if (!G.seen[i]) { mc.fillStyle = "rgba(2,4,8,.92)"; mc.fillRect(x * sc, y * sc, sc + 1, sc + 1); }
-    else if (!G.vis[i]) { mc.fillStyle = "rgba(2,4,8,.45)"; mc.fillRect(x * sc, y * sc, sc + 1, sc + 1); }
-  }
+  mc.fillStyle = "#ffd970";
+  for (const r of G.relics) if (!r.got && visible({ owner: -1, x: r.x, y: r.y }, 0)) mc.fillRect(r.x - 1.2, r.y - 1.2, 2.4, 2.4);
+  const W = GAME.canvas.width, H = GAME.canvas.height, ox = GAME._ox, oy = GAME._oy;
+  const cs = [[0, 0], [W, 0], [W, H], [0, H]].map(([sx, sy]) => {
+    const px = sx - ox, py = sy - oy;
+    return [(px / HW + py / HH) / 2, (py / HH - px / HW) / 2];
+  });
+  mc.beginPath();
+  mc.moveTo(cs[0][0], cs[0][1]);
+  for (let i = 1; i < 4; i++) mc.lineTo(cs[i][0], cs[i][1]);
+  mc.closePath();
+  mc.strokeStyle = "rgba(255,255,255,.75)";
+  mc.lineWidth = 1 / s;
+  mc.stroke();
+  mc.restore();
+  mc.strokeStyle = "rgba(58,46,16,.95)";
+  mc.lineWidth = 2;
+  mc.beginPath(); mc.moveTo(cx, 1); mc.lineTo(S - 1, cx); mc.lineTo(cx, S - 1); mc.lineTo(1, cx); mc.closePath(); mc.stroke();
 }

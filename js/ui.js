@@ -24,11 +24,13 @@ const UI = {
   },
   mmDrag(e) {
     if (!G) return;
-    const r = GAME.mm.getBoundingClientRect();
-    const fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
-    const wx = fx * G.MW - G.MH / 2, wy = fy * G.MW - G.MH / 2;
-    const nx = (wx + wy) / 2, ny = (wy - wx) / 2;
-    G.camX = clamp(nx, 0, G.MW); G.camY = clamp(ny, 0, G.MH);
+    const S = 240, r = GAME.mm.getBoundingClientRect();
+    const px = clamp((e.clientX - r.left) / r.width, 0, 1) * S, py = clamp((e.clientY - r.top) / r.height, 0, 1) * S;
+    const MW = G.MW, MH = G.MH, s = S / (MW + MH), uc = (MW - MH) / 2, vc = (MW + MH) / 2, R = (MW + MH) / 2;
+    let u = (px - S / 2) / s + uc, v = py / s;
+    const dd = Math.abs(u - uc) + Math.abs(v - vc);
+    if (dd > R) { const f = R / dd; u = uc + (u - uc) * f; v = vc + (v - vc) * f; }
+    G.camX = clamp((u + v) / 2, 0, MW); G.camY = clamp((v - u) / 2, 0, MH);
   },
   s2w(sx, sy) {
     const W = GAME.canvas.width, H = GAME.canvas.height;
