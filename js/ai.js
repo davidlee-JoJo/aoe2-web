@@ -39,7 +39,12 @@ function spotClear(typeId, x, y) {
 function aiBuild(pl, typeId, cx, cy, nBuilders) {
   const spot = aiFindSpot(typeId, cx, cy, G.players[pl].ai_rng || G.rng, typeId === "farm" ? 3 : 2, typeId === "farm" ? 7 : 16);
   if (!spot) return false;
-  const b = Cmd.build(pl, typeId, spot[0], spot[1], autoVills(pl, nBuilders || 2, spot[0], spot[1]));
+  let vs = autoVills(pl, nBuilders || 2, spot[0], spot[1]);
+  if (!vs.length) {
+    vs = G.units.filter(u => u.owner === pl && u.alive && u.spec.spr === "vill")
+      .sort((a, b) => dist2(a.x, a.y, spot[0], spot[1]) - dist2(b.x, b.y, spot[0], spot[1])).slice(0, nBuilders || 2);
+  }
+  const b = Cmd.build(pl, typeId, spot[0], spot[1], vs);
   return !!b;
 }
 function updateAI(idx, dt) {
@@ -66,7 +71,9 @@ function updateAI(idx, dt) {
     if (!G.buildings.some(b => b.alive && b.owner === idx && b.typeId === "house" && !b.done)) aiBuild(idx, "house", cx, cy, 1);
   }
   const needF = p.eraNext > p.era ? 0 : (p.era < 3 ? (D.ERAS[p.era + 1].cost.food || 0) : 0);
-  while (tc.queue.length < 2 && vills.length + tc.queue.length < targetPop && p.res.food >= 60 + needF * 0.9 && aiPopHeadroom(idx) > tc.queue.length) {
+  const reserve = vills.length < 8 ? 0 : needF * .5;
+  if (vills.length < 4 && p.res.food < 100) p.res.food += dt * (vills.length === 0 ? 8 : 6);
+  while (tc.queue.length < 2 && vills.length + tc.queue.length < targetPop && p.res.food >= 60 + reserve && aiPopHeadroom(idx) > tc.queue.length) {
     tc.train("vill");
   }
   if (vills.length >= targetPop && tc.queue.length && tc.queue[0] === "vill") tc.queue.shift();
@@ -212,7 +219,8 @@ function aiVillJob(idx, v, cx, cy) {
     if (r === "food") wF++; else if (r === "wood") wW++; else if (r === "gold") wG++; else if (r === "stone") wS++;
   }
   const tot = 0.75;
-  if (v.id % 2 === 0) { const tcs = G.buildings.filter(b => b.alive && b.owner === idx && !b.done && b.builders.filter(x => x.alive).length < 3); if (tcs.length) return { type: "bld", b: tcs[v.id % tcs.length] }; }
+  const tcs2 = G.buildings.filter(b => b.alive && b.owner === idx && !b.done && b.builders.filter(x => x.alive).length < 3);
+  if (tcs2.length) return { type: "bld", b: tcs2[v.id % tcs2.length] };
   const p = G.players[idx];
   const lumber = G.buildings.some(b => b.alive && b.done && b.owner === idx && b.typeId === "lumber");
   const doneMine = G.buildings.some(b => b.alive && b.done && b.owner === idx && b.typeId === "mine");

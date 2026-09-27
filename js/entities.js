@@ -263,6 +263,11 @@ class Unit extends Ent {
         else { if (this.repathT <= 0) { this.pathTo(tc.tx + 1, tc.ty + 3, 1.1); this.repathT = 1; } this.step(dt); }
       }
     } else if (m === "idle") {
+      if (this.spec.spr === "vill" && this.task && this.task.b && this.task.b.alive && !this.task.b.done) {
+        const b2 = this.task.b;
+        if (!b2.builders.includes(this)) b2.builders.push(this);
+        this.setMode("build");
+      }
       if (this.spec.spr === "monk") { const rl = freeRelic(this); if (rl) { this.task = { relic: rl }; this.setMode("relic"); } }
       else if (this.spec.hp > 0 && this.spec.bld !== "tc" || this.spec.atk > 0) { }
       if (this.autoAcquire()) { }
