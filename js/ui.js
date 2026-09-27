@@ -37,6 +37,30 @@ const UI = {
     const px = sx - W / 2 + (G.camX - G.camY) * HW, py = sy - H / 2 + (G.camX + G.camY) * HH;
     return [(px / HW + py / HH) / 2, (py / HH - px / HW) / 2];
   },
+  showTip(el, html) {
+    el.addEventListener("mouseenter", () => {
+      const tl = document.getElementById("tooltip");
+      tl.innerHTML = html;
+      tl.classList.remove("hidden");
+      const r = el.getBoundingClientRect(), tr = tl.getBoundingClientRect();
+      const x = Math.min(window.innerWidth - tr.width - 8, Math.max(4, r.left));
+      let y = r.top - tr.height - 8;
+      if (y < 8) y = r.bottom + 8;
+      tl.style.left = x + "px"; tl.style.top = y + "px";
+      this._tipEl = el;
+    });
+    el.addEventListener("mouseleave", () => { this._tipEl = null; document.getElementById("tooltip").classList.add("hidden"); });
+  },
+  techTip(t) {
+    return "<b style='color:#ffd970'>" + t.name.replace(/^_/, "") + "</b> <span style='color:#9a8a5a'>（" + D.ERAS[t.age].name + "）</span><br>" +
+      "<span style='color:#e8dcb8'>" + (t.desc || "") + "</span><br>" +
+      "<span style='color:#d8d0a8'>" + fmtRes(t.cost) + " ｜ 研發 " + t.t + " 秒</span>";
+  },
+  unitTip(u) {
+    return "<b style='color:#ffd970'>" + u.name + "</b><br>" +
+      "<span style='color:#e8dcb8'>生命 " + u.hp + " · 攻擊 " + u.atk + " · 護甲 " + u.ar + (u.rng >= 2 ? " · 射程 " + u.rng : "") + (u.bld ? " · " + D.BUILDS[u.bld].name : "") + "</span><br>" +
+      "<span style='color:#d8d0a8'>" + fmtRes(u.cost) + " ｜ 訓練 " + u.train + " 秒</span>";
+  },
 
   onDown(e) {
     if (!G || G.ended) return;
@@ -279,8 +303,9 @@ const UI = {
       hc.setLineDash([]);
     }
     const tl = document.getElementById("tooltip");
-    tl.classList.add("hidden");
-    if (G && !G.ended && !this.hoverUI && !this.dragging && !G.placing && !this.repairMode && !this.demolishMode && !this.rmMode) {
+    if (this._tipEl && !document.body.contains(this._tipEl)) this._tipEl = null;
+    if (!this._tipEl) tl.classList.add("hidden");
+    if (!this._tipEl && G && !G.ended && !this.hoverUI && !this.dragging && !G.placing && !this.repairMode && !this.demolishMode && !this.rmMode) {
       const [hwx, hwy] = this.s2w(this.mouse.x, this.mouse.y);
       const hr = this.pickRes(hwx, hwy);
       if (hr) {
@@ -391,9 +416,9 @@ const UI = {
       hp.innerHTML = "<i style='width:" + (b.hp / b.maxHp * 100) + "%'></i>";
       info.appendChild(hp);
       const btns = document.createElement("div"); btns.id = "cmdButtons";
-      const addBtn = (icon, cb, txt, title) => {
+      const addBtn = (icon, cb, txt, title, tip) => {
         const bt = document.createElement("div"); bt.className = "cmdBtn";
-        bt.title = title || "";
+        bt.title = tip ? "" : (title || "");
         const img = document.createElement("canvas"); img.width = 40; img.height = 34;
         const ctx = img.getContext("2d");
         try { ctx.drawImage(SPR.menuIcon(icon, G.players[0].color), 0, -6); } catch (e) { }
@@ -404,6 +429,7 @@ const UI = {
         s.style.whiteSpace = "pre"; s.style.textAlign = "center";
         bt.appendChild(s);
         bt.onclick = cb;
+        if (tip) this.showTip(bt, tip);
         btns.appendChild(bt);
       };
       const p = G.players[0];
@@ -412,7 +438,7 @@ const UI = {
           const u = D.UNITS[tid];
           if (u.bld !== b.typeId) continue;
           if (u.civ && !(D.CIVS[p.civ].units || []).includes(tid)) continue;
-          addBtn(tid, () => b.train(tid), u.name, fmtRes(u.cost) + " · " + u.train + "秒");
+          addBtn(tid, () => b.train(tid), u.name, null, this.unitTip(u));
         }
       }
       if (b.typeId === "tc") {
@@ -424,7 +450,7 @@ const UI = {
         const t = D.TECHS[tid];
         if (t.bld !== b.typeId || t.civ && t.civ !== p.civ) continue;
         if (p.techs.has(tid)) continue;
-        addBtn("tech", () => researchTech(0, tid), t.name.replace("_", ""), fmtRes(t.cost));
+        addBtn("tech", () => researchTech(0, tid), t.name.replace("_", ""), null, this.techTip(t));
       }
       if (b.typeId === "market") {
         addBtn("sell", () => sellBuy(0, "sell"), "賣糧", "出售100糧食換金");
@@ -463,7 +489,7 @@ const UI = {
     bm.appendChild(tabs);
     const items = document.createElement("div"); items.className = "items";
     const p = G.players[0];
-    const add = (id, name, cost, age, cb, off, icon) => {
+    const add = (id, name, cost, age, cb, off, icon, tip) => {
       const el = document.createElement("div"); el.className = "bItem" + (off ? " off" : "");
       const img = document.createElement("canvas"); img.width = 44; img.height = 30;
       const g2 = img.getContext("2d");
@@ -474,7 +500,8 @@ const UI = {
       const s2 = document.createElement("div"); s2.className = "costline"; s2.textContent = cost || (age ? D.ERAS[age].name : "");
       el.appendChild(s2);
       if (!off) el.onclick = cb;
-      el.title = (off ? "（不足或需求未達）" : "") + (cost || "");
+      el.title = (off ? "（不足或需求未達）" : "") + (tip ? "" : (cost || ""));
+      if (tip) this.showTip(el, tip);
       items.appendChild(el);
     };
     const T = this.buildMenuTab;
@@ -495,7 +522,7 @@ const UI = {
         if (t.civ && t.civ !== p2.civ) continue;
         if (p2.techs.has(tid) || p2.research.some(r => r.tid === tid)) continue;
         const off = t.age > p2.era || !afford(0, t.cost);
-        add("tech", t.name.replace(/^_/, ""), fmtRes(t.cost), t.age, () => researchTech(0, tid), off);
+        add("tech", t.name.replace(/^_/, ""), fmtRes(t.cost), t.age, () => researchTech(0, tid), off, null, this.techTip(t));
       }
     }
     bm.appendChild(items);
