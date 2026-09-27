@@ -57,9 +57,11 @@ const UI = {
       "<span style='color:#d8d0a8'>" + fmtRes(t.cost) + " ｜ 研發 " + t.t + " 秒</span>";
   },
   unitTip(u) {
-    return "<b style='color:#ffd970'>" + u.name + "</b><br>" +
-      "<span style='color:#e8dcb8'>生命 " + u.hp + " · 攻擊 " + u.atk + " · 護甲 " + u.ar + (u.rng >= 2 ? " · 射程 " + u.rng : "") + (u.bld ? " · " + D.BUILDS[u.bld].name : "") + "</span><br>" +
-      "<span style='color:#d8d0a8'>" + fmtRes(u.cost) + " ｜ 訓練 " + u.train + " 秒</span>";
+    return "<b style='color:#ffd970'>" + u.name + "</b> <span style='color:#9a8a5a'>（" + D.ERAS[u.age].name + "）</span><br>" +
+      "<span style='color:#e8dcb8'>生命 " + u.hp + " · 攻擊 " + u.atk + " · 護甲 " + u.ar + " · " + (u.rng >= 2 ? "射程 " + u.rng : "近戰") + "</span><br>" +
+      "<span style='color:#e8dcb8'>速度 " + u.spd.toFixed(2) + " · 攻速 " + (+u.cd.toFixed(1)) + "秒 · 視野 " + u.los + "</span>" +
+      (bonusText(u) ? "<br><span style='color:#ffd970'>" + bonusText(u) + "</span>" : "") + "<br>" +
+      "<span style='color:#d8d0a8'>" + fmtRes(u.cost) + " ｜ 訓練 " + u.train + " 秒" + (D.BUILDS[u.bld] ? " ｜ " + D.BUILDS[u.bld].name : "") + "</span>";
   },
 
   onDown(e) {
@@ -382,6 +384,10 @@ const UI = {
       const avg = sel.reduce((a, u) => a + u.hp / u.maxHp, 0) / sel.length;
       hp.innerHTML = "<i style='width:" + (avg * 100) + "%'></i>";
       info.appendChild(hp);
+      const stat = document.createElement("div");
+      stat.style.cssText = "font-size:10px;color:#d8d0a8;text-align:left;padding:1px 4px;line-height:1.55;white-space:pre-wrap";
+      stat.textContent = unitStatText(first);
+      info.appendChild(stat);
       const btns = document.createElement("div"); btns.id = "cmdButtons";
       const addBtn = (icon, cb, txt, off) => {
         const bt = document.createElement("div"); bt.className = "cmdBtn" + (off ? " off" : "");
@@ -584,4 +590,15 @@ function afford(pl, cost) {
   const p = G.players[pl];
   for (const k in cost) if ((p.res[k] || 0) < cost[k]) return false;
   return true;
+}
+const CLSNAME = { infantry: "步兵", melee: "近戰", sword: "劍兵", axe: "斧兵", ranged: "遠程", archer: "弓兵", skirmisher: "散兵", cavalry: "騎兵", cavarcher: "馬弓兵", building: "建築", siege: "攻城器", monk: "僧侶", eleph: "大象", gunpowder: "火器", boat: "船隻", camel: "駱駝" };
+function bonusText(spec) {
+  if (!spec.bonus || !spec.bonus.length) return "";
+  return "加成：" + spec.bonus.map(([c, v]) => "對" + (CLSNAME[c] || c) + " +" + v).join("、");
+}
+function unitStatText(u) {
+  const s = u.spec, st = u.st;
+  const parts = ["生命 " + Math.ceil(u.hp) + "/" + Math.ceil(u.maxHp), "攻擊 " + st.atk, "護甲 " + st.ar, st.rng >= 2 ? "射程 " + st.rng : "近戰", "速度 " + s.spd.toFixed(2), "攻速 " + (+st.cd.toFixed(1)) + "秒", "視野 " + s.los];
+  const bt = bonusText(s);
+  return parts.join(" · ") + (bt ? "\n" + bt : "") + "\n" + fmtRes(s.cost);
 }
