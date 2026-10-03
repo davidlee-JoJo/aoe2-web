@@ -191,6 +191,31 @@ function updateAI(idx, dt) {
     const monks = G.units.filter(u => u.owner === idx && u.alive && u.spec.spr === "monk" && u.mode === "idle");
     for (const m of monks) { const rl = freeRelic(m); if (rl) { m.task = { relic: rl }; m.setMode("relic"); } }
   }
+  st.navT = (st.navT || 0) - dt;
+  if (st.navT <= 0) {
+    st.navT = 4;
+    if ((G.cfg.mapType || "inland") === "coastal" && done("dock")) {
+      const dock = G.buildings.find(bb => bb.alive && bb.done && bb.owner === idx && bb.typeId === "dock");
+      const boats = G.units.filter(u => u.owner === idx && u.alive && u.naval);
+      const fisher = boats.filter(u => u.spec.sub === "fish");
+      for (const f of fisher) {
+        if (f.mode === "idle") {
+          const fish = [...G.resGrid.values()].filter(r => r.t === "fish" && r.amt > 0).sort((a, b) => dist2(a.tx, a.ty, f.x, f.y) - dist2(b.tx, b.ty, f.x, f.y))[0];
+          if (fish) Cmd.gather([f], fish, fish.tx + .5, fish.ty + .5, "food");
+        }
+      }
+      const wantFisher = Math.min(2, Math.floor(vills.length / 6) + 1);
+      if (dock && fisher.length < wantFisher && !dock.queue.length && p.res.wood >= 60) dock.train("fishing");
+      const galley = boats.find(u => u.spec.sub === "galley" && u.mode === "idle");
+      if (galley && G.time > 400) {
+        const foe = G.buildings.find(bb => bb.alive && isEnemy(idx, bb.owner) && bb.typeId === "dock");
+        if (foe) atk(galley, foe);
+      } else if (!galley && p.res.wood >= 100 && p.res.gold >= 50 && G.time > 360) {
+        const gb = G.buildings.find(bb => bb.alive && bb.owner === idx && bb.typeId === "dock" && bb.queue.length < 1);
+        if (gb) gb.train("galley");
+      }
+    }
+  }
 }
 function aiPopHeadroom(idx) { const p2 = G.players[idx]; let v = 0; for (const b of G.buildings) if (b.owner === idx && b.done && b.spec.pop) v += b.spec.pop; return Math.min(D.POP_CAP, Math.max(10, v)) - p2.popUsed; }
 function countQueue(idx) {

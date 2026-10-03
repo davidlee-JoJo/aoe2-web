@@ -57,9 +57,9 @@ const UI = {
       "<span style='color:#d8d0a8'>" + fmtRes(t.cost) + " ｜ 研發 " + t.t + " 秒</span>";
   },
   unitTip(u) {
-    return "<b style='color:#ffd970'>" + u.name + "</b> <span style='color:#9a8a5a'>（" + D.ERAS[u.age].name + "）</span><br>" +
+    return "<b style='color:#ffd970'>" + u.name + "</b> <span style='color:#9a8a5a'>（" + D.ERAS[u.age].name + (u.naval ? " · 海軍" : "") + "）</span><br>" +
       "<span style='color:#e8dcb8'>生命 " + u.hp + " · 攻擊 " + u.atk + " · 護甲 " + u.ar + " · " + (u.rng >= 2 ? "射程 " + u.rng : "近戰") + "</span><br>" +
-      "<span style='color:#e8dcb8'>速度 " + u.spd.toFixed(2) + " · 攻速 " + (+u.cd.toFixed(1)) + "秒 · 視野 " + u.los + "</span>" +
+      "<span style='color:#e8dcb8'>速度 " + u.spd.toFixed(2) + " · 攻速 " + (+u.cd.toFixed(1)) + "秒 · 視野 " + u.los + (u.capacity ? " · 載運 " + u.capacity : "") + "</span>" +
       (bonusText(u) ? "<br><span style='color:#ffd970'>" + bonusText(u) + "</span>" : "") + "<br>" +
       "<span style='color:#d8d0a8'>" + fmtRes(u.cost) + " ｜ 訓練 " + u.train + " 秒" + (D.BUILDS[u.bld] ? " ｜ " + D.BUILDS[u.bld].name : "") + "</span>";
   },
@@ -206,11 +206,11 @@ const UI = {
     }
     const r = this.pickRes(wx, wy);
     if (r) {
-      const vills = sel.filter(u => u.spec.spr === "vill");
-      if (vills.length) {
-        const resKind = r.t === "tree" ? "wood" : (r.t === "berry" ? "food" : (r.t === "gold" ? "gold" : "stone"));
-        Cmd.gather(vills, r, r.tx + .5, r.ty + .5, resKind);
-        return;
+      const canGather = sel.filter(u => u.spec.spr === "vill" || u.naval);
+      if (canGather.length) {
+        const resKind = r.t === "tree" ? "wood" : (r.t === "berry" ? "food" : (r.t === "fish" ? "food" : (r.t === "gold" ? "gold" : "stone")));
+        const who = r.t === "fish" ? canGather : sel.filter(u => u.spec.spr === "vill");
+        if (who.length) { Cmd.gather(who, r, r.tx + .5, r.ty + .5, resKind); return; }
       }
     }
     if (this.amoveArmed) { Cmd.amove(sel, wx, wy); this.amoveArmed = false; AudioSys.sfx("order"); return; }
@@ -599,6 +599,8 @@ function bonusText(spec) {
 function unitStatText(u) {
   const s = u.spec, st = u.st;
   const parts = ["生命 " + Math.ceil(u.hp) + "/" + Math.ceil(u.maxHp), "攻擊 " + st.atk, "護甲 " + st.ar, st.rng >= 2 ? "射程 " + st.rng : "近戰", "速度 " + s.spd.toFixed(2), "攻速 " + (+st.cd.toFixed(1)) + "秒", "視野 " + s.los];
+  if (u.capacity > 0) parts.push("載運 " + u.load.length + "/" + u.capacity);
+  if (u.naval) parts.push("海軍");
   const bt = bonusText(s);
   return parts.join(" · ") + (bt ? "\n" + bt : "") + "\n" + fmtRes(s.cost);
 }

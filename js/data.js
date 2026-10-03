@@ -8,7 +8,7 @@ const D = {
     { name: "城堡時代", cost: { food: 800, gold: 250 }, time: 35 },
     { name: "帝王時代", cost: { food: 1000, gold: 800 }, time: 45 }
   ],
-  DROP: { food: ["tc", "mill"], wood: ["tc", "lumber"], gold: ["tc", "mine"], stone: ["tc", "mine"] },
+  DROP: { food: ["tc", "mill", "dock"], wood: ["tc", "lumber"], gold: ["tc", "mine"], stone: ["tc", "mine"] },
   UNITPALETTE: {
     vill: { tunic: "#b3945c" }, inf: { tunic: "#7a7268" }, monk: { tunic: "#cfc7b0" },
     siege: { tunic: "#7a6a4a" }, cav: { mnt: "#5a4636" }, camel: { mnt: "#967442" }, eleph: { mnt: "#8b8d95" }
@@ -39,7 +39,10 @@ const D = {
     monk: { name: "僧侶", spr: "monk", wpn: "staff", hp: 40, atk: 0, cd: 4, ar: 0, heal: 12, cls: ["monk"], spd: 1.1, rng: 3, los: 5, cost: { gold: 100 }, age: 2, pop: 1, bld: "monastery", train: 20 },
     ram: { name: "衝車", spr: "siege", sub: "ram", hp: 200, atk: 2, cd: 3, ar: 6, sar: 4, bonus: [["building", 170]], cls: ["siege", "melee", "ram"], spd: 1.3, rng: 0.9, los: 4, cost: { wood: 150 }, age: 2, pop: 1, bld: "siege", train: 20 },
     mangonel: { name: "擲石車", spr: "siege", sub: "mang", hp: 80, atk: 9, cd: 4.5, ar: 1, bonus: [["building", 4], ["siege", 5]], cls: ["siege", "ranged", "thrower"], spd: 0.9, rng: 6, los: 8, proj: "stone", splash: 0.9, cost: { wood: 100, gold: 120 }, age: 2, pop: 1, bld: "siege", train: 22 },
-    treb: { name: "投石機", spr: "siege", sub: "treb", hp: 120, atk: 45, cd: 6, ar: 2, bonus: [["building", 120], ["siege", 10]], cls: ["siege", "ranged", "thrower"], aoe: 1.4, spd: 0.45, rng: 9, los: 10, proj: "stone", cost: { wood: 200, gold: 200 }, age: 3, pop: 2, bld: "siege", train: 28 }
+    treb: { name: "投石機", spr: "siege", sub: "treb", hp: 120, atk: 45, cd: 6, ar: 2, bonus: [["building", 120], ["siege", 10]], cls: ["siege", "ranged", "thrower"], aoe: 1.4, spd: 0.45, rng: 9, los: 10, proj: "stone", cost: { wood: 200, gold: 200 }, age: 3, pop: 2, bld: "siege", train: 28 },
+    fishing: { name: "漁船", spr: "boat", sub: "fish", naval: true, hp: 70, spd: 1.5, ar: 1, rng: 0, cd: 2, atk: 0, cls: ["boat", "naval"], los: 5, cost: { wood: 60 }, age: 1, pop: 1, bld: "dock", train: 16, carry: 10, grate: 0.4 },
+    galley: { name: "戰船", spr: "boat", sub: "galley", naval: true, hp: 120, spd: 1.45, ar: 2, rng: 5, cd: 1.8, atk: 6, cls: ["boat", "naval", "ranged"], los: 7, proj: "arrow", cost: { wood: 100, gold: 50 }, age: 2, pop: 1, bld: "dock", train: 20 },
+    transport: { name: "運輸船", spr: "boat", sub: "transport", naval: true, hp: 140, spd: 1.3, ar: 3, rng: 0, cd: 2, atk: 0, cls: ["boat", "naval"], los: 5, cost: { wood: 150 }, age: 2, pop: 1, bld: "dock", train: 22, capacity: 5 }
   },
   BUILDS: {
     tc: { name: "城鎮中心", fp: [4, 4], wh: 24, style: "hip", wall: "#c8bfa2", roof: "#8a5a30", cost: { wood: 275 }, age: 0, build: 60, hp: 2200, ar: 6, los: 6, cc: true, drop: true, pop: 10, produce: ["vill"], rally: true },
@@ -60,7 +63,7 @@ const D = {
     castle: { name: "城堡", fp: [4, 4], wh: 30, style: "castle", wall: "#adb0b8", cost: { wood: 200, gold: 100, stone: 120 }, age: 2, build: 55, hp: 3200, ar: 10, los: 10, pop: 10, tower: { atk: 8, rng: 7, cd: 2.2, proj: "arrow", shots: 2 } },
     wall: { name: "城牆", fp: [1, 1], wh: 16, style: "flat", wall: "#9a9aa2", cost: { wood: 5, stone: 8 }, age: 1, build: 5, hp: 840, ar: 8, los: 1 },
     gate: { name: "城門", fp: [2, 1], wh: 15, style: "flat", wall: "#9a9aa2", cost: { wood: 40 }, age: 1, build: 8, hp: 840, ar: 8, los: 2, openable: true },
-    dock: { name: "碼頭", fp: [3, 2], wh: 0, style: "dock", cost: { wood: 125 }, age: 1, build: 18, hp: 900, ar: 2, los: 5, drop: true },
+    dock: { name: "碼頭", fp: [3, 2], wh: 0, style: "dock", cost: { wood: 125 }, age: 1, build: 18, hp: 900, ar: 2, los: 5, drop: true, produce: ["fishing", "galley", "transport"], rally: true },
     wonder: { name: "奇觀", fp: [4, 4], wh: 30, style: "wonder", wall: "#d8d2c0", cost: { wood: 400, gold: 300, stone: 300 }, age: 3, build: 140, hp: 4400, ar: 10, los: 5 }
   },
   TECHS: {

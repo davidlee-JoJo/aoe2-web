@@ -13,6 +13,10 @@ function walkableAt(x, y, forOwner) {
   return true;
 }
 function tileRes(x, y) { return G.resGrid.get(tkey(x, y)); }
+function walkableN(x, y) {
+  if (x < 0 || y < 0 || x >= G.MW || y >= G.MH) return false;
+  return G.terr[y * G.MW + x] === 2;
+}
 function visible(e, viewer) {
   if (viewer === undefined || viewer === null) return true;
   const pv = G.players[viewer], pe = G.players[e.owner >= 0 ? e.owner : (G.humanTeam === -2 ? -9 : -1)];
@@ -71,8 +75,9 @@ function newGame(cfg) {
   }
   const spots = pickStarts(slots.length, rng);
   for (let i = 0; i < slots.length; i++) placeStart(i, spots[i], rng);
-  G.findPath = (sx,sy,tx,ty,tol,fo,bl)=>findPath(sx,sy,tx,ty,tol,fo===undefined?-1:fo,bl);
+  G.findPath = (sx,sy,tx,ty,tol,fo,bl,nav)=>findPath(sx,sy,tx,ty,tol,fo===undefined?-1:fo,bl,nav===undefined?0:nav);
   G.walkable = (x,y,fo)=>walkableAt(x,y,fo===undefined?-1:fo);
+  G.walkableN = (x,y)=>walkableN(x,y);
   const hm = G.players[0];
   const tc = G.buildings.find(b => b.owner === 0);
   G.camX = tc ? tc.tx + 1.5 : G.MW / 2; G.camY = tc ? tc.ty + 1.5 : G.MH / 2;
@@ -84,16 +89,24 @@ function newGame(cfg) {
 function genMap(cfg, rng) {
   const MW = G.MW, MH = G.MH, terr = G.terr;
   terr.fill(0);
-  const lakes = 2 + Math.floor(rng() * 3);
-  for (let l = 0; l < lakes; l++) {
-    const cx = 6 + rng() * (MW - 12), cy = 6 + rng() * (MH - 12);
-    const r = 3 + rng() * (Math.min(MW, MH) / 7);
-    if (dist2(cx, cy, MW / 2, MH / 2) < (Math.min(MW, MH) / 3) ** 2) continue;
-    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
-      const d = dist2(x, y, cx + (rng() - .5) * 2, cy + (rng() - .5) * 2);
-      const rr = r * (0.75 + rng() * 0.25);
-      if (d < rr * rr) terr[y * MW + x] = 2;
+  const mapType = cfg.mapType || "inland";
+  if (mapType === "coastal") genCoastalSea(rng, MW, MH, terr);
+  else {
+    const lakes = 2 + Math.floor(rng() * 3);
+    for (let l = 0; l < lakes; l++) {
+      const cx = 6 + rng() * (MW - 12), cy = 6 + rng() * (MH - 12);
+      const r = 3 + rng() * (Math.min(MW, MH) / 7);
+      if (dist2(cx, cy, MW / 2, MH / 2) < (Math.min(MW, MH) / 3) ** 2) continue;
+      for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
+        const d = dist2(x, y, cx + (rng() - .5) * 2, cy + (rng() - .5) * 2);
+        const rr = r * (0.75 + rng() * 0.25);
+        if (d < rr * rr) terr[y * MW + x] = 2;
+      }
     }
+  }
+  if (mapType === "coastal") {
+    freezeIsolated(MW, MH, terr);
+    placeFish(rng, MW, MH, terr);
   }
   const forestN = Math.floor(MW * MH / 130);
   for (let f = 0; f < forestN; f++) {
@@ -131,6 +144,74 @@ function genMap(cfg, rng) {
     G.relics.push({ id: r, x, y, got: false, carried: false });
   }
   makeDecals(cfg.seed || 1);
+}
+function genCoastalSea(rng, MW, MH, terr) {
+  const band = Math.max(2, Math.floor(Math.min(MW, MH) / 22));
+  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++)
+    if (x < band || x >= MW - band || y < band || y >= MH - band) terr[y * MW + x] = 2;
+  const nl = 1 + Math.floor(rng() * 2);
+  const lakes = [];
+  for (let l = 0; l < nl; l++) {
+    const cx = band + 4 + rng() * (MW - 2 * band - 8), cy = band + 4 + rng() * (MH - 2 * band - 8);
+    const r = 3 + rng() * (Math.min(MW, MH) / 9);
+    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
+      const d = dist2(x, y, cx + (rng() - .5) * 2, cy + (rng() - .5) * 2);
+      if (d < r * r) terr[y * MW + x] = 2;
+    }
+    lakes.push([cx, cy]);
+  }
+  for (const [cx, cy] of lakes) {
+    const dl = cx - band, dr = (MW - band) - cx, dt = cy - band, db = (MH - band) - cy;
+    const m = Math.min(dl, dr, dt, db);
+    carveRiver(rng, MW, MH, terr, cx, cy, m === dl ? -1 : (m === dr ? 1 : 0), m === dt ? -1 : (m === db ? 1 : 0));
+  }
+}
+function carveRiver(rng, MW, MH, terr, x0, y0, dirx, diry) {
+  let x = x0, y = y0;
+  const w = rng() < .5 ? 1 : 2;
+  let guard = 0;
+  while (x > 0 && y > 0 && x < MW - 1 && y < MH - 1 && guard++ < 400) {
+    for (let dx = 0; dx < w; dx++) for (let dy = 0; dy < w; dy++) {
+      const xx = Math.floor(x + dx), yy = Math.floor(y + dy);
+      if (xx >= 0 && yy >= 0 && xx < MW && yy < MH) terr[yy * MW + xx] = 2;
+    }
+    const wig = (rng() - .5) * 2.4;
+    if (dirx !== 0) { x += dirx; y += wig; } else { y += diry; x += wig; }
+  }
+}
+function freezeIsolated(MW, MH, terr) {
+  let sx = -1, sy = -1;
+  for (let y = 0; y < MH && sx < 0; y++) for (let x = 0; x < MW; x++) if (terr[y * MW + x] === 2) { sx = x; sy = y; break; }
+  if (sx < 0) return;
+  const seen = new Uint8Array(MW * MH);
+  const q = [sy * MW + sx]; seen[sy * MW + sx] = 1;
+  while (q.length) {
+    const i = q.pop(), x = i % MW, y = (i / MW) | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy, ni = ny * MW + nx;
+      if (nx < 0 || ny < 0 || nx >= MW || ny >= MH) continue;
+      if (!seen[ni] && terr[ni] === 2) { seen[ni] = 1; q.push(ni); }
+    }
+  }
+  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
+    const i = y * MW + x;
+    if (terr[i] === 2 && !seen[i]) terr[i] = 0;
+  }
+}
+function placeFish(rng, MW, MH, terr) {
+  const per = Math.max(4, Math.floor(MW * MH / 200));
+  const shore = [];
+  for (let y = 1; y < MH - 1; y++) for (let x = 1; x < MW - 1; x++) {
+    if (terr[y * MW + x] !== 2) continue;
+    if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => terr[(y + dy) * MW + x + dx] !== 2)) shore.push([x, y]);
+  }
+  if (!shore.length) return;
+  const step = Math.max(1, Math.floor(shore.length / per));
+  for (let i = 0; i < shore.length; i += step) {
+    const [x, y] = shore[i];
+    if (G.resGrid.has(tkey(x, y))) continue;
+    G.resGrid.set(tkey(x, y), { t: "fish", amt: 120 + rng() * 80, tx: x, ty: y });
+  }
 }
 function makeDecals(seed) {
   const MW = G.MW, MH = G.MH, dr = makeRng("dec" + seed);
@@ -187,9 +268,10 @@ function placeStart(i, [sx, sy], rng) {
 
 const OPEN = [], F = new Float64Array(1 << 16), GC = new Float64Array(1 << 16), PREV = new Int32Array(1 << 16);
 let visitStamp = 0, VS = new Int32Array(1 << 16);
-function findPath(sx, sy, tx, ty, tol, forOwner, block) {
+function findPath(sx, sy, tx, ty, tol, forOwner, block, naval) {
   sx = clamp(sx | 0, 0, G.MW - 1); sy = clamp(sy | 0, 0, G.MH - 1);
   tx = clamp(tx | 0, 0, G.MW - 1); ty = clamp(ty | 0, 0, G.MH - 1);
+  const walk = naval ? walkableN : (nx, ny) => walkableAt(nx, ny, forOwner === undefined ? -1 : forOwner);
   const MW = G.MW, MH = G.MH;
   const start = sy * MW + sx, goal = ty * MW + tx, size = MW * MH;
   if (start === goal) return [{ x: tx + .5, y: ty + .5 }];
@@ -212,9 +294,9 @@ function findPath(sx, sy, tx, ty, tol, forOwner, block) {
       if (!oy2 && !ox2) continue;
       const nx = cx + ox2, ny = cy + oy2;
       if (nx < 0 || ny < 0 || nx >= MW || ny >= MH) continue;
-      if (!walkableAt(nx, ny, forOwner === undefined ? -1 : forOwner)) continue;
+      if (!walk(nx, ny)) continue;
       if (block && block.has(ny * MW + nx)) continue;
-      if (ox2 && oy2 && (!walkableAt(cx + ox2, cy, -1) || !walkableAt(cx, cy + oy2, -1))) continue;
+      if (!naval && ox2 && oy2 && (!walkableAt(cx + ox2, cy, -1) || !walkableAt(cx, cy + oy2, -1))) continue;
       const ni = ny * MW + nx;
       const g = GC[cur] + (ox2 && oy2 ? 1.414 : 1);
       if (VS[ni] !== visitStamp) { VS[ni] = visitStamp; GC[ni] = g; F[ni] = g + h(ni); PREV[ni] = cur; pushHeap(heap, ni, F[ni]); }
@@ -333,11 +415,10 @@ function refreshStats(pl) {
 function separate(dt) {
   const cell = {}, MW = G.MW;
   for (const u of G.units) {
-    if (!u.alive) continue;
+    if (!u.alive || u.boarded) continue;
     const k = ((u.y | 0) * MW + (u.x | 0));
     (cell[k] || (cell[k] = [])).push(u);
-  }
-  for (const k in cell) {
+  }  for (const k in cell) {
     const arr = cell[k];
     const kk = k | 0;
     const nb = [arr];
@@ -347,7 +428,7 @@ function separate(dt) {
     }
     for (const other of nb) for (let i = 0; i < arr.length; i++) for (let j = (other === arr ? i + 1 : 0); j < other.length; j++) {
       const a = arr[i], b = other[j];
-      if (!a.alive || !b.alive) continue;
+      if (!a.alive || !b.alive || a.boarded || b.boarded) continue;
       const dx = b.x - a.x, dy = b.y - a.y;
       const d = Math.hypot(dx, dy);
       if (d < .5 && d > .001) {
@@ -359,10 +440,11 @@ function separate(dt) {
     }
   }
   for (const u of G.units) {
-    if (!u.alive) continue;
-    if (!walkableAt(u.x | 0, u.y | 0, u.owner)) {
+    if (!u.alive || u.boarded) continue;
+    const wk = u.naval ? walkableN : (xx, yy) => walkableAt(xx, yy, u.owner);
+    if (!wk(u.x | 0, u.y | 0)) {
       const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]];
-      for (const [dx, dy] of dirs) if (walkableAt((u.x | 0) + dx, (u.y | 0) + dy, u.owner)) { u.x = (u.x | 0) + dx + .5; u.y = (u.y | 0) + dy + .5; break; }
+      for (const [dx, dy] of dirs) if (wk((u.x | 0) + dx, (u.y | 0) + dy)) { u.x = (u.x | 0) + dx + .5; u.y = (u.y | 0) + dy + .5; break; }
     }
   }
 }
@@ -445,6 +527,8 @@ function renderGame() {
       if (t === 2) {
         const nearLand = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => tx + dx >= 0 && ty + dy >= 0 && tx + dx < G.MW && ty + dy < G.MH && G.terr[(ty + dy) * G.MW + tx + dx] !== 2);
         c.drawImage(SPR.tile(nearLand ? "shallows" : "water", (wframe + (tx + ty) % 2) % 2), sx - 32, sy - 16);
+        const fr = tileRes(tx, ty);
+        if (fr && fr.t === "fish") c.drawImage(SPR.fish(), sx - 7, sy - 5);
       } else {
         const r = tileRes(tx, ty);
         let tn = "grass";
@@ -590,6 +674,7 @@ function hpBar(c, x, y, w, r) {
   c.fillRect(x - w / 2, y, w * clamp(r, 0, 1), 3.5);
 }
 function drawUnit(c, u, w2s) {
+  if (u.boarded) return;
   const [sx, sy] = w2s(u.x, u.y);
   const sub = u.spec.sub;
   let act = u.act || "std", af = 0;
@@ -598,7 +683,8 @@ function drawUnit(c, u, w2s) {
   else if (act === "farm" || act === "heal") af = (u.actT * 2.4 | 0) % 2;
   else if (act === "atk" || act === "fire") af = u.actK > .16 ? 2 : (u.actK > 0 ? 1 : 0);
   let spr;
-  if (u.spec.spr === "siege" && sub) spr = SPR.siege(sub, G.players[u.owner].color);
+  if (u.spec.spr === "boat") spr = SPR.boat(u.spec.sub || "galley", G.players[u.owner].color);
+  else if (u.spec.spr === "siege" && sub) spr = SPR.siege(sub, G.players[u.owner].color);
   else spr = SPR.unit(u.spec.spr, G.players[u.owner].color, u.dir, u.alive ? u.frame : 0, u.spec.wpn || "none", act, af);
   c.globalAlpha = u.alive ? 1 : Math.max(0, u.fade);
   c.drawImage(spr, sx - spr.width / 2, sy - spr.height + 8);

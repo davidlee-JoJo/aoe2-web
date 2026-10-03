@@ -35,6 +35,7 @@ const Main = {
   },
   startFromLobby() {
     const size = +document.getElementById("selMapSize").value;
+    const mapType = document.getElementById("selMap").value;
     const nOpp = +document.getElementById("selOpp").value;
     const teamMode = document.getElementById("selTeam").value;
     const diff = +document.getElementById("selDiff").value;
@@ -44,7 +45,7 @@ const Main = {
     const rest = shuffle(civIds.filter(c => c !== myCiv), Math.random);
     for (let i = 0; i < nOpp; i++) picks.push(rest[i % rest.length]);
     const slots = picks.map((c, i) => ({ civ: c, human: i === 0, team: teamMode === "ffa" ? i : (i === 0 ? 0 : (i % 2 !== 0 ? 0 : 1)) }));
-    const cfg = { mapSize: size, slots, diff, relicWin: document.getElementById("chkRelic").checked, wonderWin: document.getElementById("chkWonder").checked, seed: Math.random() * 1e9 | 0 };
+    const cfg = { mapSize: size, mapType, slots, diff, relicWin: document.getElementById("chkRelic").checked, wonderWin: document.getElementById("chkWonder").checked, seed: Math.random() * 1e9 | 0 };
     document.getElementById("screenLobby").classList.add("hidden");
     this.launch(cfg, null);
     const info = document.getElementById("lobbyPicks");
@@ -166,8 +167,9 @@ function loadGame(data) {
     cfg, relicTotal: 4, ended: false, wonderB: null, floaters: [], parts: []
   };
   window.G = G;
-  G.findPath = (sx, sy, tx, ty, tol, fo, bl) => findPath(sx, sy, tx, ty, tol, fo === undefined ? -1 : fo, bl);
+  G.findPath = (sx, sy, tx, ty, tol, fo, bl, nav) => findPath(sx, sy, tx, ty, tol, fo === undefined ? -1 : fo, bl, nav === undefined ? 0 : nav);
   G.walkable = (x, y, fo) => walkableAt(x, y, fo === undefined ? -1 : fo);
+  G.walkableN = (x, y) => walkableN(x, y);
   G.humanTeam = cfg.slots[0].team;
   data.players.forEach((pd, i) => {
     G.players.push({ idx: i, civ: pd.civ, isAI: pd.isAI, isHuman: i === 0, team: pd.team, color: pd.color, res: pd.res, era: pd.era, eraNext: pd.eraNext, eraT: pd.eraT, techs: new Set(pd.techs), research: pd.research || [], popUsed: pd.popUsed, alive: pd.alive, resigned: pd.resigned || false, relics: pd.relics, wonderT: pd.wonderT, wonderBuilt: !!pd.wonderBuilt, hitT: 0, ai: {} });

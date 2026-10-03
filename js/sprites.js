@@ -324,6 +324,39 @@ const SPR = {
     });
   },
 
+  boat(sub, colorIdx) {
+    return this._mem("b_boat_" + sub + "_" + colorIdx, () => {
+      const c = cc(56, 44), g = c.getContext("2d");
+      const col = D.PCOLORS[colorIdx % D.PCOLORS.length];
+      g.fillStyle = "rgba(0,0,0,.28)"; g.beginPath(); g.ellipse(28, 40, 22, 4, 0, 0, 7); g.fill();
+      const hull = () => { g.beginPath(); g.moveTo(4, 26); g.lineTo(24, 18); g.lineTo(32, 18); g.lineTo(52, 26); g.lineTo(32, 34); g.lineTo(24, 34); g.closePath(); };
+      hull(); g.fillStyle = "#6b4523"; g.fill();
+      hull(); g.lineWidth = 1; g.strokeStyle = "rgba(40,25,10,.7)"; g.stroke();
+      g.beginPath(); g.moveTo(10, 26); g.lineTo(26, 21); g.lineTo(30, 21); g.lineTo(46, 26); g.lineTo(30, 30); g.lineTo(26, 30); g.closePath(); g.fillStyle = "#8a6438"; g.fill();
+      g.fillStyle = "#4c3218"; g.fillRect(26, 6, 3, 20);
+      g.beginPath(); g.moveTo(28, 7); g.lineTo(45, 14); g.lineTo(28, 16); g.closePath(); g.fillStyle = col; g.fill();
+      g.beginPath(); g.moveTo(26, 7); g.lineTo(10, 14); g.lineTo(26, 16); g.closePath(); g.fillStyle = shade(col, .78); g.fill();
+      if (sub === "fish") {
+        g.fillStyle = "#5c4326";
+        g.fillRect(12, 20, 8, 2); g.fillRect(32, 30, 8, 2);
+      } else if (sub === "galley") {
+        g.fillStyle = "#9a8a6a";
+        g.fillRect(14, 22, 4, 8); g.fillRect(38, 22, 4, 8);
+      }
+      this._outline(g, c.width, c.height);
+      return c;
+    });
+  },
+  fish() {
+    return this._mem("f_fish", () => {
+      const c = cc(14, 10), g = c.getContext("2d");
+      g.fillStyle = "#a8b0b8"; g.beginPath(); g.ellipse(7, 5, 5, 2.6, 0, 0, 7); g.fill();
+      g.fillStyle = "#6a7078"; g.beginPath(); g.moveTo(11, 5); g.lineTo(14, 2); g.lineTo(14, 8); g.closePath(); g.fill();
+      g.fillStyle = "#2a2f36"; g.fillRect(4, 3, 1, 1); g.fillRect(6, 3, 1, 1);
+      return c;
+    });
+  },
+
   _isoPts(w, d) {
     return (dx, dy) => [((dx - dy) - (w - d) / 2) * HW, ((dx + dy) - (w + d) / 2) * HH];
   },
@@ -491,7 +524,7 @@ const SPR = {
       g.imageSmoothingEnabled = false;
       if (D.UNITS[typeId]) {
         const u = D.UNITS[typeId];
-        const s = SPR.unit(u.spr, colorIdx, 1, 0, u.wpn);
+        const s = u.spr === "boat" ? this.boat(u.sub || "galley", colorIdx) : (u.spr === "siege" ? this.siege(u.sub, colorIdx) : this.unit(u.spr, colorIdx, 1, 0, u.wpn));
         const sc = Math.min(56 / s.width, 90 / (s.height / 1.1));
         g.save(); g.translate(54, 102); g.scale(Math.max(1.4, sc), Math.max(1.4, sc)); g.drawImage(s, -s.width / 2, -s.height); g.restore();
       } else {
@@ -509,7 +542,7 @@ const SPR = {
       g.imageSmoothingEnabled = false;
       if (D.UNITS[id]) {
         const u = D.UNITS[id];
-        const s = SPR.unit(u.spr, colorIdx, 1, 0, u.wpn);
+        const s = u.spr === "boat" ? this.boat(u.sub || "galley", colorIdx) : (u.spr === "siege" ? this.siege(u.sub, colorIdx) : this.unit(u.spr, colorIdx, 1, 0, u.wpn));
         const sc = Math.min(40 / s.width, 34 / (s.height / 1.05));
         g.save(); g.translate(22, 30); g.scale(sc, sc); g.drawImage(s, -s.width / 2, -s.height); g.restore();
       } else if (D.BUILDS[id]) {

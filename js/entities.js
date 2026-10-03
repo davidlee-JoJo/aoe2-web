@@ -64,6 +64,7 @@ class Unit extends Ent {
     this.atkT = 0; this.repathT = 0; this.aggroT = 0; this.dropB = null;
     this.spawnT = 0.4;
     this.act = "std"; this.actT = 0; this.actK = 0; this.stuckT = 0;
+    this.naval = !!this.spec.naval; this.capacity = this.spec.capacity || 0; this.load = []; this.loadCD = 0;
   }
   pop() { return this.spec.pop || 1; }
   setMode(m) { this.mode = m; this.path = null; }
@@ -83,8 +84,8 @@ class Unit extends Ent {
     }
     if (block.size === 0) block = null;
     else block.delete(sy0 * G.MW + sx0);
-    let p = G.findPath(sx0, sy0, tx, ty, tol || 1.2, this.owner, block);
-    if (!p && block) p = G.findPath(sx0, sy0, tx, ty, tol || 1.2, this.owner, null);
+    let p = G.findPath(sx0, sy0, tx, ty, tol || 1.2, this.owner, block, this.naval ? 1 : 0);
+    if (!p && block) p = G.findPath(sx0, sy0, tx, ty, tol || 1.2, this.owner, null, this.naval ? 1 : 0);
     if (p) { this.path = p; this.pathI = 0; return true; }
     return false;
   }
@@ -114,10 +115,11 @@ class Unit extends Ent {
     const sp = this.st.spd * dt;
     const x0 = this.x, y0 = this.y;
     const cx0 = this.x | 0, cy0 = this.y | 0;
+    const wk = this.naval ? G.walkableN : (xx, yy) => G.walkable(xx, yy, this.owner);
     const x1 = this.x + mvx * sp;
-    if ((x1 | 0) === cx0 || G.walkable(x1 | 0, cy0, this.owner)) this.x = x1;
+    if ((x1 | 0) === cx0 || wk(x1 | 0, cy0)) this.x = x1;
     const y1 = this.y + mvy * sp;
-    if ((y1 | 0) === (this.y | 0) || G.walkable(this.x | 0, y1 | 0, this.owner)) this.y = y1;
+    if ((y1 | 0) === (this.y | 0) || wk(this.x | 0, y1 | 0)) this.y = y1;
     this.dir = dirOf(mvx, mvy);
     const moved = Math.hypot(this.x - x0, this.y - y0);
     this.stuckT = moved < sp * .5 ? (this.stuckT || 0) + dt : 0;
@@ -165,9 +167,9 @@ class Unit extends Ent {
       if (!b.done || b.owner !== this.owner) continue;
       if (!D.BUILDS[b.typeId].drop) continue;
       const dl = D.BUILDS[b.typeId];
-      const isTC = b.typeId === "tc", isMill = b.typeId === "mill", isL = b.typeId === "lumber", isM = b.typeId === "mine";
+      const isTC = b.typeId === "tc", isMill = b.typeId === "mill", isL = b.typeId === "lumber", isM = b.typeId === "mine", isDock = b.typeId === "dock";
       let ok = false;
-      if (resKind === "food") ok = isTC || isMill;
+      if (resKind === "food") ok = isTC || isMill || isDock;
       if (resKind === "wood") ok = isTC || isL;
       if (resKind === "gold" || resKind === "stone") ok = isTC || isM;
       if (!ok) continue;
@@ -179,6 +181,7 @@ class Unit extends Ent {
   }
   update(dt) {
     if (!this.alive) return;
+    if (this.boarded) return;
     if (this.spawnT > 0) this.spawnT -= dt;
     if (this.atkT > 0) this.atkT -= dt;
     if (this.actK > 0) this.actK -= dt;
@@ -272,6 +275,52 @@ class Unit extends Ent {
       else if (this.spec.hp > 0 && this.spec.bld !== "tc" || this.spec.atk > 0) { }
       if (this.autoAcquire()) { }
     }
+    if (this.naval && this.capacity > 0) this.transport(dt);
+  }
+  transport(dt) {
+    if (this.loadCD > 0) this.loadCD -= dt;
+    if (this.mode !== "idle") return;
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]];
+    let nearLand = false;
+    for (const [dx, dy] of dirs) {
+      const nx = (this.x | 0) + dx, ny = (this.y | 0) + dy;
+      if (nx >= 0 && ny >= 0 && nx < G.MW && ny < G.MH && G.terr[ny * G.MW + nx] !== 2) { nearLand = true; break; }
+    }
+    if (!nearLand) return;
+    if (this.load.length) {
+      if (this.loadCD <= 0) {
+        for (const u of [...this.load]) {
+          const t = this.edgeSpot();
+          if (t) { u.x = t.x; u.y = t.y; u.boarded = null; u.mode = "idle"; }
+        }
+        this.load = this.load.filter(x => x.boarded === this);
+        this.loadCD = 1.6;
+      }
+      return;
+    }
+    if (this.loadCD <= 0 && this.nearDock()) {
+      const spots = [];
+      for (const u of G.units) if (u.alive && !u.boarded && !u.naval && u.owner === this.owner && u.spec.spr !== "vill" && u.mode === "idle" && Math.hypot(u.x - this.x, u.y - this.y) < 1.6) spots.push(u);
+      spots.sort((a, b) => dist2(a.x, a.y, this.x, this.y) - dist2(b.x, b.y, this.x, this.y));
+      const cap = this.capacity - this.load.length;
+      for (const u of spots.slice(0, cap)) { u.boarded = this; this.load.push(u); }
+      if (this.load.length) this.loadCD = 1.2;
+    }
+  }
+  nearDock() {
+    for (const b of G.buildings) if (b.alive && b.done && b.owner === this.owner && b.typeId === "dock") {
+      const bx = b.tx + b.spec.fp[0] / 2, by = b.ty + b.spec.fp[1] / 2;
+      if (Math.hypot(bx - this.x, by - this.y) < 9) return true;
+    }
+    return false;
+  }
+  edgeSpot() {
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]];
+    for (const [dx, dy] of dirs) {
+      const nx = (this.x | 0) + dx, ny = (this.y | 0) + dy;
+      if (nx >= 0 && ny >= 0 && nx < G.MW && ny < G.MH && G.terr[ny * G.MW + nx] !== 2 && G.walkable(nx, ny, -1)) return { x: nx + .5, y: ny + .5 };
+    }
+    return null;
   }
   autoAcquire() {
     if (this.mode !== "idle" && this.mode !== "amove") return false;
@@ -330,6 +379,16 @@ class Unit extends Ent {
     }
   }
   findNextRes(res, oldSrc) {
+    if (this.naval) {
+      let best = null, bd = 1e9;
+      for (const r of G.resGrid.values()) {
+        if (r.t !== "fish" || r === oldSrc || (r.amt !== undefined ? r.amt : 0) <= 0) continue;
+        const dd = Math.abs(r.tx - this.x) + Math.abs(r.ty - this.y);
+        if (dd > 16 || dd >= bd) continue;
+        best = r; bd = dd;
+      }
+      return best;
+    }
     const kinds = res === "wood" ? ["tree"] : res === "gold" ? ["gold"] : res === "stone" ? ["stone"] : ["berry"];
     let best = null, bd = 1e9;
     for (const r of G.resGrid.values()) {
@@ -446,6 +505,14 @@ class Building extends Ent {
     for (const [cx, cy] of cands) if (G.walkable(cx, cy, -1)) return [cx + .5, cy + .5];
     return null;
   }
+  waterEdgeTile() {
+    const w = this.spec.fp[0], d = this.spec.fp[1];
+    const cands = [];
+    for (let dx = -1; dx <= w; dx++) { cands.push([this.tx + dx, this.ty - 1]); cands.push([this.tx + dx, this.ty + d]); }
+    for (let dy = 0; dy < d; dy++) { cands.push([this.tx - 1, this.ty + dy]); cands.push([this.tx + w, this.ty + dy]); }
+    for (const [cx, cy] of cands) if (cx >= 0 && cy >= 0 && cx < G.MW && cy < G.MH && G.terr[cy * G.MW + cx] === 2) return [cx + .5, cy + .5];
+    return null;
+  }
   update(dt) {
     if (!this.alive) return;
     if (!this.done) { this.hp = Math.max(1, 1 + this.progress * (this.maxHp - 1)); return; }
@@ -467,7 +534,15 @@ class Building extends Ent {
         const p = G.players[this.owner];
         const spec2 = D.UNITS[tid];
         const st = calcStats(tid, p);
-        let [sx, sy] = this.rally && G.walkable(this.rally[0] | 0, this.rally[1] | 0, -1) ? this.rally : (this.edgeFreeTile() || [this.tx + this.spec.fp[0] / 2, this.ty + this.spec.fp[1] + 1]);
+        let sx, sy;
+        if (spec2.naval) {
+          const rw = this.rally && (this.rally[0] | 0) >= 0 && (this.rally[1] | 0) >= 0 && (this.rally[0] | 0) < G.MW && (this.rally[1] | 0) < G.MH && G.terr[(this.rally[1] | 0) * G.MW + (this.rally[0] | 0)] === 2;
+          if (rw) { [sx, sy] = this.rally; }
+          else { const wt = this.waterEdgeTile(); if (wt) { sx = wt[0]; sy = wt[1]; } else { sx = this.tx + this.spec.fp[0] / 2; sy = this.ty + this.spec.fp[1] + 1; } }
+        } else {
+          const rr = this.rally && G.walkable(this.rally[0] | 0, this.rally[1] | 0, -1) ? this.rally : (this.edgeFreeTile() || [this.tx + this.spec.fp[0] / 2, this.ty + this.spec.fp[1] + 1]);
+          sx = rr[0]; sy = rr[1];
+        }
         const u = new Unit(this.owner, tid, sx, sy);
         G.units.push(u);
         p.popUsed += u.pop();
