@@ -163,7 +163,7 @@ function loadGame(data) {
     players: [], units: [], buildings: [], animals: [], projs: [], relics: [],
     time: data.time || 0, speed: 1, paused: false, running: true,
     camX: 0, camY: 0, camSPD: 14, keys: {},
-    sel: new Set(), selBld: null, ctrl: {}, placing: null, visionT: 0, mmDirty: true, fogDirty: 0,
+    sel: new Set(), selBld: null, inspectU: null, inspectB: null, ctrl: {}, placing: null, visionT: 0, mmDirty: true, fogDirty: 0,
     cfg, relicTotal: 4, ended: false, wonderB: null, floaters: [], parts: []
   };
   window.G = G;

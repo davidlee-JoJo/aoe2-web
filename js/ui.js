@@ -79,7 +79,7 @@ const UI = {
     }
     if (this.demolishMode) {
       const b = this.pickBuilding(wx, wy, false);
-      if (b && b.owner === 0 && b !== (G.selBld)) {
+      if (b && b.owner === 0) {
         b.claimTiles(false); b.alive = false;
         refund(G.players[0], b.spec.cost);
         toast("已拆除 " + D.BUILDS[b.typeId].name);
@@ -100,19 +100,28 @@ const UI = {
     const additive = e.shiftKey;
     if (d < 6) {
       const [wx, wy] = this.s2w(e.clientX, e.clientY);
-      if (!additive) { if (!e.ctrlKey) G.sel.clear(); G.selBld = null; }
+      if (!additive) { if (!e.ctrlKey) G.sel.clear(); G.selBld = null; G.inspectU = null; G.inspectB = null; }
       const u = this.pickUnit(wx, wy);
       if (u) {
-        const dbl = (performance.now() - this.lastClickT < 380) && this.lastClickSel && lastClickEnt && lastClickEnt.tid === u.tid;
-        lastClickEnt = u;
-        this.lastClickT = performance.now(); this.lastClickSel = u;
-        if (dbl) G.units.filter(q => q.owner === 0 && q.alive && q.tid === u.tid && dist2(q.x, q.y, u.x, u.y) < 100).forEach(q => G.sel.add(q));
-        else G.sel.add(u);
-        AudioSys.sfx("select");
-        G.selBld = null;
+        if (u.owner === 0) {
+          const dbl = (performance.now() - this.lastClickT < 380) && this.lastClickSel && lastClickEnt && lastClickEnt.tid === u.tid;
+          lastClickEnt = u;
+          this.lastClickT = performance.now(); this.lastClickSel = u;
+          if (dbl) G.units.filter(q => q.owner === 0 && q.alive && q.tid === u.tid && dist2(q.x, q.y, u.x, u.y) < 100).forEach(q => G.sel.add(q));
+          else G.sel.add(u);
+          G.inspectU = null; G.inspectB = null;
+          AudioSys.sfx("select");
+          G.selBld = null;
+        } else if (visible(u, 0)) {
+          G.sel.clear(); G.selBld = null; G.inspectU = u; G.inspectB = null;
+          AudioSys.sfx("select");
+        }
       } else {
-        const b = this.pickBuilding(wx, wy, true);
-        if (b) { G.selBld = b; G.sel.clear(); AudioSys.sfx("select"); }
+        const b = this.pickBuilding(wx, wy, false);
+        if (b) {
+          if (b.owner === 0) { G.selBld = b; G.sel.clear(); G.inspectU = null; G.inspectB = null; AudioSys.sfx("select"); }
+          else if (isVisibleB(b)) { G.sel.clear(); G.selBld = null; G.inspectU = null; G.inspectB = b; AudioSys.sfx("select"); }
+        }
       }
       this.refreshPanel();
     } else {
@@ -122,7 +131,7 @@ const UI = {
       const cD = this.s2w(Math.max(this.dragS.x, this.dragE.x), Math.max(this.dragS.y, this.dragE.y));
       const xs = [cA[0], cB[0], cC[0], cD[0]], ys = [cA[1], cB[1], cC[1], cD[1]];
       const x1 = Math.min(...xs), x2 = Math.max(...xs), y1 = Math.min(...ys), y2 = Math.max(...ys);
-      if (!additive) { G.sel.clear(); G.selBld = null; }
+      if (!additive) { G.sel.clear(); G.selBld = null; G.inspectU = null; G.inspectB = null; }
       let any = false;
       for (const u of G.units) {
         if (u.owner !== 0 || !u.alive) continue;
@@ -241,7 +250,7 @@ const UI = {
       (G.ctrl[n] || []).forEach(u => { if (u.alive) G.sel.add(u); });
       this.refreshPanel(); e.preventDefault(); return;
     }
-    if (k === "escape") { G.placing = null; this.repairMode = false; this.demolishMode = false; this.amoveArmed = false; UI.closeMenus(); Main.toggleMenu(); return; }
+    if (k === "escape") { G.placing = null; this.repairMode = false; this.demolishMode = false; this.amoveArmed = false; G.sel.clear(); G.selBld = null; G.inspectU = null; G.inspectB = null; UI.closeMenus(); Main.toggleMenu(); return; }
     if (k === "a") { this.amoveArmed = true; toast("攻擊移動：選擇目標地點"); return; }
     if (k === "s") { Cmd.stop([...G.sel].filter(u => u.owner === 0)); return; }
     if (k === "h") { Cmd.stop([...G.sel]); return; }
@@ -358,6 +367,8 @@ const UI = {
     const panel = document.getElementById("cmdPanel");
     const sel = [...G.sel].filter(u => u.alive && u.owner === 0);
     const b = G.selBld && G.selBld.alive && G.selBld.owner === 0 ? G.selBld : null;
+    const iu = G.inspectU && G.inspectU.alive ? G.inspectU : null;
+    const ib = G.inspectB && G.inspectB.alive ? G.inspectB : null;
     let sig = "";
     if (sel.length) {
       const t = {};
@@ -365,6 +376,8 @@ const UI = {
       sig = "u" + Object.keys(t).map(k => k + t[k]).join(",");
       if (sel.some(u => u.carry > 0)) sig += "c" + (G.time | 0);
     } else if (b) sig = "b" + b.id + (b.done ? "" : ":" + (b.progress * 4 | 0)) + ":" + b.queue.length + ":" + (b.queue[0] || "") + (b.queue.length ? (b.qt / 2 | 0) : "") + ":" + (!b.done ? "p" : "") + (G.players[0].era);
+    else if (iu) sig = "iu" + iu.tid + ":" + (iu.hp | 0);
+    else if (ib) sig = "ib" + ib.typeId + ":" + (ib.hp | 0);
     else sig = "none";
     if (sig === this.lastPanel) return;
     this.lastPanel = sig;
@@ -475,6 +488,40 @@ const UI = {
         btns.appendChild(qd);
       }
       info.appendChild(btns);
+      panel.appendChild(info);
+    } else if (iu) {
+      const spec = iu.spec, o = G.players[iu.owner];
+      const portrait = document.createElement("div"); portrait.id = "cmdPortrait";
+      portrait.appendChild(SPR.portrait(iu.tid, o.color, false));
+      panel.appendChild(portrait);
+      const info = document.createElement("div"); info.id = "cmdInfo";
+      const nm = document.createElement("div"); nm.id = "cmdName";
+      nm.innerHTML = spec.name + " <span style='color:#e06a5a;font-size:11px'>（敵方）</span>";
+      info.appendChild(nm);
+      const hp = document.createElement("div"); hp.id = "cmdHp";
+      hp.innerHTML = "<i style='width:" + (iu.hp / iu.maxHp * 100) + "%'></i>";
+      info.appendChild(hp);
+      const stat = document.createElement("div");
+      stat.style.cssText = "font-size:10px;color:#e8b0a8;text-align:left;padding:1px 4px;line-height:1.55;white-space:pre-wrap";
+      stat.textContent = unitStatText(iu);
+      info.appendChild(stat);
+      panel.appendChild(info);
+    } else if (ib) {
+      const spec = ib.spec, o = G.players[ib.owner];
+      const portrait = document.createElement("div"); portrait.id = "cmdPortrait";
+      portrait.appendChild(SPR.portrait(ib.typeId, o.color, false));
+      panel.appendChild(portrait);
+      const info = document.createElement("div"); info.id = "cmdInfo";
+      const nm = document.createElement("div"); nm.id = "cmdName";
+      nm.innerHTML = spec.name + " <span style='color:#e06a5a;font-size:11px'>（敵方）</span>";
+      info.appendChild(nm);
+      const hp = document.createElement("div"); hp.id = "cmdHp";
+      hp.innerHTML = "<i style='width:" + (ib.hp / ib.maxHp * 100) + "%'></i>";
+      info.appendChild(hp);
+      const stat = document.createElement("div");
+      stat.style.cssText = "font-size:10px;color:#e8b0a8;text-align:left;padding:1px 4px;line-height:1.55";
+      stat.textContent = "生命 " + Math.ceil(ib.hp) + "/" + ib.maxHp + "　防禦 " + spec.ar + "　視野 " + spec.los;
+      info.appendChild(stat);
       panel.appendChild(info);
     }
     if (G.placing) this.openBuildMenu();
